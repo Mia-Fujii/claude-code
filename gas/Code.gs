@@ -5,12 +5,24 @@
 // SLACK_CHANNEL_ID : 通知先SlackチャンネルID
 // GEMINI_API_KEY   : Google AI Studio APIキー（無料）
 //                    取得: https://aistudio.google.com/app/apikey
+// KEYWORDS         : 検索キーワード（カンマ区切り）
+//                    例: 請求書,契約書,顧問料,広告費
+// SIGNATURE        : メール署名（例: 株式会社Lsurii事務局）
+// SENDER_NAME      : 返信冒頭の名乗り（例: Lsurii事務局）
 // ============================================================
 
 const PROPS = PropertiesService.getScriptProperties();
 
-// Gmailの検索キーワード（チャットワーク側と合わせる）
-const GMAIL_QUERY = 'is:unread subject:(請求書 OR 契約書 OR 顧問料)';
+// Gmailの検索キーワード（スクリプトプロパティから取得）
+function getGmailQuery() {
+  const keywords = (PROPS.getProperty('KEYWORDS') || '請求書,契約書,顧問料')
+    .split(',')
+    .map(k => k.trim())
+    .filter(k => k.length > 0)
+    .map(k => `subject:"${k}"`)
+    .join(' OR ');
+  return `is:unread (${keywords})`;
+}
 
 // Geminiモデル
 const GEMINI_MODEL = 'gemini-2.5-flash';
@@ -21,7 +33,7 @@ const GEMINI_MODEL = 'gemini-2.5-flash';
 // ============================================================
 
 function checkAndNotify() {
-  const threads = GmailApp.search(GMAIL_QUERY);
+  const threads = GmailApp.search(getGmailQuery());
   if (threads.length === 0) return;
 
   const processedIds = getProcessedIds();
@@ -381,7 +393,7 @@ function buildQuotedReply(replyText, fromAddress, date, subject, originalBody) {
   const emailMatch = fromAddress.match(/<(.+)>/);
   const emailOnly = emailMatch ? `<${emailMatch[1]}>` : `<${fromAddress}>`;
 
-  const signature = `――――――――――\n株式会社Dears事務局`;
+  const signature = `――――――――――\n${PROPS.getProperty('SIGNATURE') || '株式会社Dears事務局'}`;
 
   return `${replyText}
 
@@ -442,7 +454,7 @@ ${body}
 
 返信の要件:
 - 丁寧なビジネスメール形式
-- 冒頭は「Dears事務局です。」から始める（名前は名乗らない）
+- 冒頭は「${PROPS.getProperty('SENDER_NAME') || 'Dears事務局'}です。」から始める（名前は名乗らない）
 - 受領確認を含める
 - 必要に応じて確認事項や次のステップを記載
 - 署名は不要（別途自動追加されます）
