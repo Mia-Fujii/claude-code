@@ -385,11 +385,10 @@ function buildQuotedReply(replyText, fromAddress, date, subject, originalBody) {
 
   return `${replyText}
 
+${signature}
 
 ${date} ${emailOnly}
-${originalBody}
-
-${signature}`;
+${originalBody}`;
 }
 
 // 日付を「2026年3月16日(月) 23:15」形式にフォーマット
