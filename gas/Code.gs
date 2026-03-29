@@ -1,110 +1,138 @@
 // ============================================================
 // 設定（スクリプトプロパティに保存してください）
 // ============================================================
-// SLACK_BOT_TOKEN       : Slack Bot Token (xoxb-...)
-// SLACK_CHANNEL_ID      : 通知先チャンネルID
-// GEMINI_API_KEY        : Google AI Studio APIキー（無料枠あり）
-// PROCESSED_IDS_KEY     : 処理済みメールID保存用（変更不要）
+// CHATWORK_API_TOKEN  : ChatWork APIトークン
+// CHATWORK_ROOM_ID    : 通知先ChatWorkルームID
+// SLACK_BOT_TOKEN     : Slack Bot Token (xoxb-...)
+// SLACK_CHANNEL_ID    : 通知先SlackチャンネルID
+// GEMINI_API_KEY      : Google AI Studio APIキー（無料）
 //
-// スクリプトプロパティの設定方法:
+// スクリプトプロパティの設定:
 // GASエディタ → プロジェクトの設定 → スクリプトプロパティ
-//
-// Gemini APIキーの取得:
-// https://aistudio.google.com/app/apikey → 無料で取得可能
+// Gemini APIキー取得: https://aistudio.google.com/app/apikey
 // ============================================================
 
 const PROPS = PropertiesService.getScriptProperties();
 
-// 重要メールの検出キーワード（件名に含まれる場合に通知）
-const KEYWORDS = [
-  '請求書', '請求', 'invoice', 'Invoice',
-  '契約書', '契約', 'contract', 'Contract',
-  '見積書', '見積', 'quotation', 'Quotation',
-  '発注書', '発注', 'order', 'Order',
-  '領収書', '領収', 'receipt', 'Receipt',
-];
+// 通知する時間帯（8:00〜18:10）
+const START_HOUR = 8;
+const START_MINUTE = 0;
+const END_HOUR = 18;
+const END_MINUTE = 10;
+
+// Gmailの検索クエリ（既存と同じキーワード）
+const GMAIL_QUERY = 'is:unread subject:(請求書 OR 契約書 OR 顧問料)';
+
+// Geminiモデル（無料枠: 15 req/min, 1500 req/day）
+const GEMINI_MODEL = 'gemini-2.0-flash-exp';
 
 // ============================================================
-// 1. Gmail監視（タイマートリガーで定期実行）
+// メイン関数（タイマートリガーで実行）
 // ============================================================
 
-/**
- * メインの監視関数
- * GASのタイマートリガーで5〜10分ごとに実行してください
- */
-function checkImportantEmails() {
-  const query = buildGmailQuery();
-  const threads = GmailApp.search(query, 0, 20);
-
-  const processedIds = getProcessedIds();
-  const newProcessedIds = [...processedIds];
-
-  for (const thread of threads) {
-    const messages = thread.getMessages();
-    for (const message of messages) {
-      const messageId = message.getId();
-      if (processedIds.includes(messageId)) continue;
-
-      const subject = message.getSubject();
-      if (!isImportantEmail(subject)) continue;
-
-      const emailData = extractEmailData(message);
-      sendSlackNotification(emailData);
-
-      newProcessedIds.push(messageId);
-    }
+function gmailNotify() {
+  // 時間チェック
+  if (!isWithinBusinessHours()) {
+    const now = new Date();
+    console.log(`時間外のため停止します（現在 ${now.getHours()}:${now.getMinutes()}）`);
+    return;
   }
 
-  // 処理済みIDを保存（最新500件まで保持）
-  saveProcessedIds(newProcessedIds.slice(-500));
-}
+  const threads = GmailApp.search(GMAIL_QUERY);
+  if (threads.length === 0) return;
 
-/**
- * Gmail検索クエリ生成（未読 + キーワード）
- */
-function buildGmailQuery() {
-  const keywordQuery = KEYWORDS.map(k => `subject:"${k}"`).join(' OR ');
-  return `is:unread (${keywordQuery})`;
-}
+  threads.forEach(thread => {
+    const msg = thread.getMessages().pop();
 
-/**
- * 件名に重要キーワードが含まれるか判定
- */
-function isImportantEmail(subject) {
-  return KEYWORDS.some(keyword =>
-    subject.toLowerCase().includes(keyword.toLowerCase())
-  );
-}
+    const emailData = {
+      id: msg.getId(),
+      threadId: thread.getId(),
+      subject: msg.getSubject(),
+      from: msg.getFrom(),
+      date: Utilities.formatDate(msg.getDate(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm'),
+      body: msg.getPlainBody().slice(0, 2000),
+      permalink: thread.getPermalink(),
+    };
 
-/**
- * メールデータを抽出
- */
-function extractEmailData(message) {
-  const body = message.getPlainBody();
-  return {
-    id: message.getId(),
-    threadId: message.getThread().getId(),
-    subject: message.getSubject(),
-    from: message.getFrom(),
-    date: Utilities.formatDate(message.getDate(), 'Asia/Tokyo', 'yyyy/MM/dd HH:mm'),
-    body: body.substring(0, 2000), // 最初の2000文字
-    permalink: `https://mail.google.com/mail/u/0/#inbox/${message.getThread().getId()}`,
-  };
+    // ChatWorkに通知（既存の動作）
+    sendChatworkNotification(emailData, msg);
+
+    // Slackに通知（AIボタン付き）
+    sendSlackNotification(emailData);
+
+    // 既読にして重複処理を防ぐ
+    thread.markRead();
+  });
 }
 
 // ============================================================
-// 2. Slack通知送信（ボタン付き）
+// 時間チェック
 // ============================================================
 
-/**
- * Slackにインタラクティブ通知を送信
- */
+function isWithinBusinessHours() {
+  const now = new Date();
+  const current = now.getHours() * 100 + now.getMinutes();
+  const start = START_HOUR * 100 + START_MINUTE;
+  const end = END_HOUR * 100 + END_MINUTE;
+  return current >= start && current <= end;
+}
+
+// ============================================================
+// ChatWork通知（既存の動作をそのまま維持）
+// ============================================================
+
+function sendChatworkNotification(emailData, msg) {
+  const token = PROPS.getProperty('CHATWORK_API_TOKEN');
+  const roomId = PROPS.getProperty('CHATWORK_ROOM_ID');
+  if (!token || !roomId) {
+    console.log('ChatWork設定未完了のためスキップ');
+    return;
+  }
+
+  const headers = { 'X-ChatWorkToken': token };
+
+  function fetchChatwork(endpoint, options) {
+    try {
+      const params = { headers: headers, muteHttpExceptions: true, ...options };
+      const response = UrlFetchApp.fetch('https://api.chatwork.com/v2' + endpoint, params);
+      if (response.getResponseCode() >= 300) return null;
+      return JSON.parse(response.getContentText());
+    } catch (e) { return null; }
+  }
+
+  const me = fetchChatwork('/me');
+  if (!me) return;
+  const myId = me.account_id;
+
+  const cwMessage =
+    `[To:${myId}]\n` +
+    `[info][title]📩 メール通知: ${emailData.subject}[/title]` +
+    `【送信元】: ${emailData.from}\n` +
+    `【本　文】: \n${emailData.body.slice(0, 300)}...\n\n` +
+    `🔗 Gmailで開く: ${emailData.permalink}[/info]`;
+
+  const sentResponse = fetchChatwork('/rooms/' + roomId + '/messages', {
+    method: 'post',
+    payload: { body: cwMessage },
+  });
+
+  if (sentResponse && sentResponse.message_id) {
+    fetchChatwork('/rooms/' + roomId + '/messages/unread', {
+      method: 'put',
+      payload: { message_id: sentResponse.message_id },
+    });
+  }
+}
+
+// ============================================================
+// Slack通知（AIボタン付き）
+// ============================================================
+
 function sendSlackNotification(emailData) {
   const token = PROPS.getProperty('SLACK_BOT_TOKEN');
   const channel = PROPS.getProperty('SLACK_CHANNEL_ID');
-
   if (!token || !channel) {
-    Logger.log('ERROR: SLACK_BOT_TOKEN または SLACK_CHANNEL_ID が未設定です');
+    console.log('Slack設定未完了のためスキップ');
     return;
   }
 
@@ -114,11 +142,7 @@ function sendSlackNotification(emailData) {
     blocks: [
       {
         type: 'header',
-        text: {
-          type: 'plain_text',
-          text: '📧 重要メール通知',
-          emoji: true,
-        },
+        text: { type: 'plain_text', text: '📧 重要メール通知', emoji: true },
       },
       {
         type: 'section',
@@ -170,112 +194,137 @@ function sendSlackNotification(emailData) {
 
   const result = JSON.parse(response.getContentText());
   if (!result.ok) {
-    Logger.log(`Slack送信エラー: ${result.error}`);
+    console.log(`Slack送信エラー: ${result.error}`);
   }
 }
 
 // ============================================================
-// 3. Slackインタラクション受信 (doPost)
+// Slackボタン受信（GAS Webアプリ doPost）
 // ============================================================
 
-/**
- * SlackのインタラクティブペイロードをGAS Webアプリとして受信
- * GASをウェブアプリとしてデプロイし、そのURLをSlackのInteractivity URLに設定
- */
 function doPost(e) {
   try {
-    // Slackはapplication/x-www-form-urlencodedで送信
     const rawPayload = e.parameter.payload;
-    if (!rawPayload) {
-      return ContentService.createTextOutput('OK');
-    }
+    if (!rawPayload) return ContentService.createTextOutput('OK');
 
     const payload = JSON.parse(rawPayload);
 
-    // 3秒以内にレスポンスを返す（Slackのタイムアウト対策）
-    // 実際の処理は非同期で行う
     if (payload.type === 'block_actions') {
       handleBlockAction(payload);
     }
 
     return ContentService.createTextOutput('OK');
   } catch (error) {
-    Logger.log(`doPostエラー: ${error.toString()}`);
+    console.log(`doPostエラー: ${error.toString()}`);
     return ContentService.createTextOutput('Error');
   }
 }
 
-/**
- * Slackボタンアクション処理
- */
 function handleBlockAction(payload) {
   const action = payload.actions[0];
   const responseUrl = payload.response_url;
 
   if (action.action_id !== 'create_draft') return;
 
-  // Slackに「処理中」を即時返信
-  notifySlackProcessing(responseUrl, action.value);
-
-  // メール情報取得
   const actionData = JSON.parse(action.value);
-  const messageId = actionData.messageId;
 
-  // Gmailからメール本文を再取得（フル版）
-  let emailBody = '';
+  // 処理中をSlackに通知
+  postToResponseUrl(responseUrl, {
+    replace_original: false,
+    text: `⏳ *${actionData.subject}* の返信下書きを作成中です...`,
+  });
+
+  // メール本文を再取得（フル版）
   let emailSubject = actionData.subject;
   let emailFrom = actionData.from;
+  let emailBody = '';
   try {
-    const message = GmailApp.getMessageById(messageId);
+    const message = GmailApp.getMessageById(actionData.messageId);
     emailBody = message.getPlainBody();
     emailSubject = message.getSubject();
     emailFrom = message.getFrom();
   } catch (err) {
-    Logger.log(`メール取得エラー: ${err.toString()}`);
-    notifySlackError(responseUrl, 'メールの取得に失敗しました');
+    postToResponseUrl(responseUrl, {
+      replace_original: false,
+      text: '❌ メールの取得に失敗しました',
+    });
     return;
   }
 
   // Gemini APIで返信文生成
   const draftBody = generateReplyWithGemini(emailSubject, emailFrom, emailBody);
   if (!draftBody) {
-    notifySlackError(responseUrl, 'AI返信の生成に失敗しました（Gemini APIキーを確認してください）');
+    postToResponseUrl(responseUrl, {
+      replace_original: false,
+      text: '❌ AI返信の生成に失敗しました（GEMINI_API_KEYを確認してください）',
+    });
     return;
   }
 
   // Gmail下書き作成
   const replyTo = emailFrom.match(/<(.+)>/)?.[1] || emailFrom;
   const draftSubject = emailSubject.startsWith('Re:') ? emailSubject : `Re: ${emailSubject}`;
-
   try {
     GmailApp.createDraft(replyTo, draftSubject, draftBody);
   } catch (err) {
-    Logger.log(`下書き作成エラー: ${err.toString()}`);
-    notifySlackError(responseUrl, 'Gmail下書きの作成に失敗しました');
+    postToResponseUrl(responseUrl, {
+      replace_original: false,
+      text: '❌ Gmail下書きの作成に失敗しました',
+    });
     return;
   }
 
-  // Slackに完了通知（下書き内容プレビュー付き）
-  notifySlackDraftCreated(responseUrl, draftSubject, draftBody, replyTo);
+  // 完了通知
+  const preview = draftBody.substring(0, 600);
+  postToResponseUrl(responseUrl, {
+    replace_original: false,
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `✅ *Gmail下書きを作成しました*\n*宛先:* ${replyTo}\n*件名:* ${draftSubject}`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*下書き内容（抜粋）:*\n\`\`\`${preview}${draftBody.length > 600 ? '\n...' : ''}\`\`\``,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: '📝 <https://mail.google.com/mail/u/0/#drafts|Gmailの下書きを開く> で確認・編集して送信してください',
+        },
+      },
+    ],
+  });
+}
+
+function postToResponseUrl(responseUrl, payload) {
+  try {
+    UrlFetchApp.fetch(responseUrl, {
+      method: 'post',
+      contentType: 'application/json; charset=utf-8',
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true,
+    });
+  } catch (err) {
+    console.log(`response_url送信エラー: ${err.toString()}`);
+  }
 }
 
 // ============================================================
-// 4. Gemini API呼び出し（無料枠あり）
+// Gemini API（無料枠: 15 req/min, 1500 req/day）
 // ============================================================
 
-// 使用するGeminiモデル
-// gemini-2.0-flash-exp : 最新・高性能（無料枠: 15 req/min, 1500 req/day）
-// gemini-1.5-flash     : 安定版（無料枠: 15 req/min, 1500 req/day）
-const GEMINI_MODEL = 'gemini-2.0-flash-exp';
-
-/**
- * Gemini APIを使って返信文を生成
- * Google AI Studio ( https://aistudio.google.com/app/apikey ) でAPIキーを無料取得可能
- */
 function generateReplyWithGemini(subject, from, body) {
   const apiKey = PROPS.getProperty('GEMINI_API_KEY');
   if (!apiKey) {
-    Logger.log('ERROR: GEMINI_API_KEY が未設定です');
+    console.log('ERROR: GEMINI_API_KEY が未設定です');
     return null;
   }
 
@@ -295,168 +344,47 @@ ${body}
 - 署名は「[お名前]」というプレースホルダーにする
 - 返信本文のみを出力（説明文・前置き不要）`;
 
-  const requestPayload = {
-    contents: [
-      {
-        parts: [{ text: prompt }],
-      },
-    ],
-    generationConfig: {
-      maxOutputTokens: 1024,
-      temperature: 0.7,
-    },
-  };
-
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
   try {
     const response = UrlFetchApp.fetch(url, {
       method: 'post',
       contentType: 'application/json',
-      payload: JSON.stringify(requestPayload),
+      payload: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: 1024, temperature: 0.7 },
+      }),
       muteHttpExceptions: true,
     });
 
     const result = JSON.parse(response.getContentText());
-
     if (result.error) {
-      Logger.log(`Gemini APIエラー: ${JSON.stringify(result.error)}`);
+      console.log(`Gemini APIエラー: ${JSON.stringify(result.error)}`);
       return null;
     }
 
     return result.candidates?.[0]?.content?.parts?.[0]?.text || null;
   } catch (err) {
-    Logger.log(`Gemini API呼び出しエラー: ${err.toString()}`);
+    console.log(`Gemini API呼び出しエラー: ${err.toString()}`);
     return null;
   }
 }
 
 // ============================================================
-// 5. Slackレスポンス送信ヘルパー
+// 初期セットアップ（一度だけ手動実行）
 // ============================================================
 
-/**
- * 処理中メッセージをSlackに送信
- */
-function notifySlackProcessing(responseUrl, actionValue) {
-  const data = JSON.parse(actionValue);
-  postToResponseUrl(responseUrl, {
-    replace_original: false,
-    text: `⏳ *${data.subject}* の返信下書きを作成中です...`,
-  });
-}
-
-/**
- * 下書き作成完了をSlackに通知
- */
-function notifySlackDraftCreated(responseUrl, subject, body, replyTo) {
-  const preview = body.substring(0, 600);
-  postToResponseUrl(responseUrl, {
-    replace_original: false,
-    blocks: [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `✅ *Gmail下書きを作成しました*\n*宛先:* ${replyTo}\n*件名:* ${subject}`,
-        },
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*下書き内容（抜粋）:*\n\`\`\`${preview}${body.length > 600 ? '\n...' : ''}\`\`\``,
-        },
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: '📝 <https://mail.google.com/mail/u/0/#drafts|Gmailの下書きを開く> で確認・編集して送信してください',
-        },
-      },
-    ],
-  });
-}
-
-/**
- * エラーをSlackに通知
- */
-function notifySlackError(responseUrl, message) {
-  postToResponseUrl(responseUrl, {
-    replace_original: false,
-    text: `❌ エラーが発生しました: ${message}`,
-  });
-}
-
-/**
- * Slackのresponse_urlにメッセージを送信
- */
-function postToResponseUrl(responseUrl, payload) {
-  try {
-    UrlFetchApp.fetch(responseUrl, {
-      method: 'post',
-      contentType: 'application/json; charset=utf-8',
-      payload: JSON.stringify(payload),
-      muteHttpExceptions: true,
-    });
-  } catch (err) {
-    Logger.log(`response_url送信エラー: ${err.toString()}`);
-  }
-}
-
-// ============================================================
-// 6. 処理済みメールID管理
-// ============================================================
-
-function getProcessedIds() {
-  const raw = PROPS.getProperty('PROCESSED_IDS_KEY') || '[]';
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
-}
-
-function saveProcessedIds(ids) {
-  PROPS.setProperty('PROCESSED_IDS_KEY', JSON.stringify(ids));
-}
-
-// ============================================================
-// 7. 初期セットアップ用（手動で一度だけ実行）
-// ============================================================
-
-/**
- * タイマートリガーをセットアップ（5分ごとに実行）
- * GASエディタから手動で一度だけ実行してください
- */
 function setupTrigger() {
-  // 既存のトリガーを削除
   ScriptApp.getProjectTriggers().forEach(trigger => {
-    if (trigger.getHandlerFunction() === 'checkImportantEmails') {
+    if (trigger.getHandlerFunction() === 'gmailNotify') {
       ScriptApp.deleteTrigger(trigger);
     }
   });
 
-  // 新しいトリガーを作成（5分ごと）
-  ScriptApp.newTrigger('checkImportantEmails')
+  ScriptApp.newTrigger('gmailNotify')
     .timeBased()
     .everyMinutes(5)
     .create();
 
-  Logger.log('✅ タイマートリガーを設定しました（5分ごと）');
-}
-
-/**
- * 設定確認用（手動で実行して設定が正しいか確認）
- */
-function checkConfiguration() {
-  const required = ['SLACK_BOT_TOKEN', 'SLACK_CHANNEL_ID', 'CLAUDE_API_KEY'];
-  const missing = required.filter(key => !PROPS.getProperty(key));
-
-  if (missing.length > 0) {
-    Logger.log(`❌ 未設定のプロパティ: ${missing.join(', ')}`);
-  } else {
-    Logger.log('✅ 全ての必要なプロパティが設定されています');
-  }
+  console.log('✅ タイマートリガーを設定しました（5分ごと）');
 }
