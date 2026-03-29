@@ -13,7 +13,7 @@ const PROPS = PropertiesService.getScriptProperties();
 const GMAIL_QUERY = 'is:unread subject:(請求書 OR 契約書 OR 顧問料)';
 
 // Geminiモデル（無料枠: 15 req/min, 1500 req/day）
-const GEMINI_MODEL = 'gemini-1.5-flash';
+const GEMINI_MODEL = 'gemini-2.0-flash';
 
 // ============================================================
 // メイン関数（タイマートリガーで5分ごとに実行）
