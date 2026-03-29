@@ -183,6 +183,7 @@ function handleBlockAction(payload) {
     emailBody = message.getPlainBody();
     emailSubject = message.getSubject();
     emailFrom = message.getFrom();
+    emailDate = formatJapaneseDate(message.getDate());
   } catch (err) {
     updateModalWithError(loadingViewId, 'メールの取得に失敗しました');
     return;
@@ -381,20 +382,27 @@ function handleViewSubmission(payload) {
 // ============================================================
 
 function buildQuotedReply(replyText, fromAddress, date, subject, originalBody) {
-  const quotedLines = originalBody
-    .split('\n')
-    .map(line => `> ${line}`)
-    .join('\n');
+  // メールアドレスだけ抽出（"名前 <email>" → "<email>"、または "email" そのまま）
+  const emailMatch = fromAddress.match(/<(.+)>/);
+  const emailOnly = emailMatch ? `<${emailMatch[1]}>` : `<${fromAddress}>`;
 
   return `${replyText}
 
 
---- 元のメール ---
-差出人: ${fromAddress}
-日時: ${date}
-件名: ${subject}
+${date} ${emailOnly}
+${originalBody}`;
+}
 
-${quotedLines}`;
+// 日付を「2026年3月16日(月) 23:15」形式にフォーマット
+function formatJapaneseDate(date) {
+  const DOW = ['日', '月', '火', '水', '木', '金', '土'];
+  const y = date.getFullYear();
+  const m = date.getMonth() + 1;
+  const d = date.getDate();
+  const dow = DOW[date.getDay()];
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `${y}年${m}月${d}日(${dow}) ${hh}:${mm}`;
 }
 
 // ============================================================
