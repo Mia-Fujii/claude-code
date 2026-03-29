@@ -3,11 +3,14 @@
 // ============================================================
 // SLACK_BOT_TOKEN       : Slack Bot Token (xoxb-...)
 // SLACK_CHANNEL_ID      : 通知先チャンネルID
-// CLAUDE_API_KEY        : Anthropic API Key
+// GEMINI_API_KEY        : Google AI Studio APIキー（無料枠あり）
 // PROCESSED_IDS_KEY     : 処理済みメールID保存用（変更不要）
 //
 // スクリプトプロパティの設定方法:
 // GASエディタ → プロジェクトの設定 → スクリプトプロパティ
+//
+// Gemini APIキーの取得:
+// https://aistudio.google.com/app/apikey → 無料で取得可能
 // ============================================================
 
 const PROPS = PropertiesService.getScriptProperties();
@@ -233,10 +236,10 @@ function handleBlockAction(payload) {
     return;
   }
 
-  // Claude APIで返信文生成
-  const draftBody = generateReplyWithClaude(emailSubject, emailFrom, emailBody);
+  // Gemini APIで返信文生成
+  const draftBody = generateReplyWithGemini(emailSubject, emailFrom, emailBody);
   if (!draftBody) {
-    notifySlackError(responseUrl, 'AI返信の生成に失敗しました');
+    notifySlackError(responseUrl, 'AI返信の生成に失敗しました（Gemini APIキーを確認してください）');
     return;
   }
 
@@ -257,16 +260,22 @@ function handleBlockAction(payload) {
 }
 
 // ============================================================
-// 4. Claude API呼び出し
+// 4. Gemini API呼び出し（無料枠あり）
 // ============================================================
 
+// 使用するGeminiモデル
+// gemini-2.0-flash-exp : 最新・高性能（無料枠: 15 req/min, 1500 req/day）
+// gemini-1.5-flash     : 安定版（無料枠: 15 req/min, 1500 req/day）
+const GEMINI_MODEL = 'gemini-2.0-flash-exp';
+
 /**
- * Claude APIを使って返信文を生成
+ * Gemini APIを使って返信文を生成
+ * Google AI Studio ( https://aistudio.google.com/app/apikey ) でAPIキーを無料取得可能
  */
-function generateReplyWithClaude(subject, from, body) {
-  const apiKey = PROPS.getProperty('CLAUDE_API_KEY');
+function generateReplyWithGemini(subject, from, body) {
+  const apiKey = PROPS.getProperty('GEMINI_API_KEY');
   if (!apiKey) {
-    Logger.log('ERROR: CLAUDE_API_KEY が未設定です');
+    Logger.log('ERROR: GEMINI_API_KEY が未設定です');
     return null;
   }
 
@@ -284,40 +293,40 @@ ${body}
 - 受領確認を含める
 - 必要に応じて確認事項や次のステップを記載
 - 署名は「[お名前]」というプレースホルダーにする
-- 返信本文のみを出力（説明文不要）`;
+- 返信本文のみを出力（説明文・前置き不要）`;
 
   const requestPayload = {
-    model: 'claude-sonnet-4-6',
-    max_tokens: 1024,
-    messages: [
+    contents: [
       {
-        role: 'user',
-        content: prompt,
+        parts: [{ text: prompt }],
       },
     ],
+    generationConfig: {
+      maxOutputTokens: 1024,
+      temperature: 0.7,
+    },
   };
 
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+
   try {
-    const response = UrlFetchApp.fetch('https://api.anthropic.com/v1/messages', {
+    const response = UrlFetchApp.fetch(url, {
       method: 'post',
       contentType: 'application/json',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
       payload: JSON.stringify(requestPayload),
       muteHttpExceptions: true,
     });
 
     const result = JSON.parse(response.getContentText());
+
     if (result.error) {
-      Logger.log(`Claude APIエラー: ${JSON.stringify(result.error)}`);
+      Logger.log(`Gemini APIエラー: ${JSON.stringify(result.error)}`);
       return null;
     }
 
-    return result.content[0].text;
+    return result.candidates?.[0]?.content?.parts?.[0]?.text || null;
   } catch (err) {
-    Logger.log(`Claude API呼び出しエラー: ${err.toString()}`);
+    Logger.log(`Gemini API呼び出しエラー: ${err.toString()}`);
     return null;
   }
 }

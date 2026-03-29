@@ -39,7 +39,7 @@ GASエディタ → **プロジェクトの設定** → **スクリプトプロ�
 |---|---|
 | `SLACK_BOT_TOKEN` | `xoxb-...`（Slack Bot Token） |
 | `SLACK_CHANNEL_ID` | 通知先チャンネルのID（例: `C0XXXXXXXX`） |
-| `CLAUDE_API_KEY` | Anthropic APIキー（`sk-ant-...`） |
+| `GEMINI_API_KEY` | Google AI Studio APIキー（無料取得: https://aistudio.google.com/app/apikey） |
 
 ### 4. GASをWebアプリとしてデプロイ
 
@@ -80,5 +80,6 @@ const KEYWORDS = [
 
 - GAS WebアプリはHTTPS必須のため、そのままSlackに設定可能です
 - Slackのインタラクションは3秒以内にレスポンスが必要です（GASは即時200 OKを返し、処理は続行します）
-- Claude APIの使用料金はAnthropicの料金体系に従います
+- Gemini APIは無料枠あり（Gemini 2.0 Flash: 15リクエスト/分、1500リクエスト/日）
+- APIキーは https://aistudio.google.com/app/apikey で無料取得できます
 - Gmail下書きはGmailの「下書き」フォルダに保存されます
