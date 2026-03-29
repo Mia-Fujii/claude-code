@@ -29,6 +29,23 @@ RSS_FEEDS = [
 EMOJI_NUMS = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"]
 
 
+def translate_ja(text: str) -> str:
+    """MyMemory無料APIで英語→日本語翻訳"""
+    if not text:
+        return text
+    try:
+        r = requests.get(
+            "https://api.mymemory.translated.net/get",
+            params={"q": text, "langpair": "en|ja"},
+            timeout=10,
+        )
+        result = r.json()["responseData"]["translatedText"]
+        time.sleep(0.5)  # レート制限対策
+        return result
+    except Exception:
+        return text  # 失敗時は元のテキストをそのまま返す
+
+
 def fetch_rss(feed_name: str, url: str, max_items: int = 7) -> list[dict]:
     """RSSフィードから最新記事を取得"""
     headers = {"User-Agent": "Mozilla/5.0 (compatible; AINewsBot/1.0)"}
@@ -133,6 +150,11 @@ def main():
     if not articles:
         print("[ERROR] 記事を取得できませんでした")
         return
+
+    print("日本語に翻訳中...")
+    for a in articles:
+        a["title"] = translate_ja(a["title"])
+        a["desc"]  = translate_ja(a["desc"]) if a["desc"] else ""
 
     parts = build_parts(articles, today_str)
     send_to_discord(parts)
