@@ -378,15 +378,18 @@ function handleViewSubmission(payload) {
 // ============================================================
 
 function buildQuotedReply(replyText, fromAddress, date, subject, originalBody) {
-  // メールアドレスだけ抽出（"名前 <email>" → "<email>"、または "email" そのまま）
   const emailMatch = fromAddress.match(/<(.+)>/);
   const emailOnly = emailMatch ? `<${emailMatch[1]}>` : `<${fromAddress}>`;
+
+  const signature = `――――――――――\n株式会社Dears事務局`;
 
   return `${replyText}
 
 
 ${date} ${emailOnly}
-${originalBody}`;
+${originalBody}
+
+${signature}`;
 }
 
 // 日付を「2026年3月16日(月) 23:15」形式にフォーマット
@@ -443,11 +446,7 @@ ${body}
 - 冒頭は「Dears事務局です。」から始める（名前は名乗らない）
 - 受領確認を含める
 - 必要に応じて確認事項や次のステップを記載
-- 文末の署名は必ず以下の形式にする:
-
-――――――――――
-株式会社Dears事務局
-
+- 署名は不要（別途自動追加されます）
 - 返信本文のみを出力（説明文・前置き不要）`;
 
   try {
