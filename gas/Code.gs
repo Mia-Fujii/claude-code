@@ -12,7 +12,7 @@ const PROPS = PropertiesService.getScriptProperties();
 // Gmailの検索キーワード（チャットワーク側と合わせる）
 const GMAIL_QUERY = 'is:unread subject:(請求書 OR 契約書 OR 顧問料)';
 
-// Geminiモデル（無料枠: 15 req/min, 1500 req/day）
+// Geminiモデル
 const GEMINI_MODEL = 'gemini-2.5-flash';
 
 // ============================================================
@@ -31,7 +31,6 @@ function checkAndNotify() {
     const msg = thread.getMessages().pop();
     const messageId = msg.getId();
 
-    // 通知済みはスキップ
     if (processedIds.includes(messageId)) return;
 
     const emailData = {
@@ -47,7 +46,6 @@ function checkAndNotify() {
     newIds.push(messageId);
   });
 
-  // 処理済みIDを保存（最新500件まで）
   saveProcessedIds(newIds.slice(-500));
 }
 
@@ -102,6 +100,8 @@ function sendSlackNotification(emailData) {
                 messageId: emailData.id,
                 subject: emailData.subject,
                 from: emailData.from,
+                date: emailData.date,
+                body: emailData.body.slice(0, 1000),
               }),
             },
             {
@@ -124,7 +124,7 @@ function sendSlackNotification(emailData) {
 }
 
 // ============================================================
-// Slackボタン受信（GAS Webアプリ doPost）
+// Slackインタラクション受信（GAS Webアプリ doPost）
 // ============================================================
 
 function doPost(e) {
@@ -133,8 +133,14 @@ function doPost(e) {
     if (!rawPayload) return ContentService.createTextOutput('OK');
 
     const payload = JSON.parse(rawPayload);
+
     if (payload.type === 'block_actions') {
       handleBlockAction(payload);
+      return ContentService.createTextOutput('OK');
+    }
+
+    if (payload.type === 'view_submission') {
+      return handleViewSubmission(payload);
     }
 
     return ContentService.createTextOutput('OK');
@@ -144,9 +150,15 @@ function doPost(e) {
   }
 }
 
+// ============================================================
+// ボタン押下：AI生成 → 編集モーダルを開く
+// ============================================================
+
 function handleBlockAction(payload) {
   const action = payload.actions[0];
   const responseUrl = payload.response_url;
+  const triggerId = payload.trigger_id;
+
   if (action.action_id !== 'create_draft') return;
 
   const actionData = JSON.parse(action.value);
@@ -154,13 +166,14 @@ function handleBlockAction(payload) {
   // 処理中をSlackに通知
   postToResponseUrl(responseUrl, {
     replace_original: false,
-    text: `⏳ *${actionData.subject}* の返信下書きを作成中です...`,
+    text: `⏳ *${actionData.subject}* の返信文を生成中です...`,
   });
 
-  // メール本文を再取得
+  // メール本文を再取得（フル版）
   let emailSubject = actionData.subject;
   let emailFrom = actionData.from;
-  let emailBody = '';
+  let emailDate = actionData.date;
+  let emailBody = actionData.body;
   try {
     const message = GmailApp.getMessageById(actionData.messageId);
     emailBody = message.getPlainBody();
@@ -175,8 +188,8 @@ function handleBlockAction(payload) {
   }
 
   // Gemini APIで返信文生成
-  const draftBody = generateReplyWithGemini(emailSubject, emailFrom, emailBody);
-  if (!draftBody) {
+  const generatedReply = generateReplyWithGemini(emailSubject, emailFrom, emailBody);
+  if (!generatedReply) {
     postToResponseUrl(responseUrl, {
       replace_original: false,
       text: '❌ AI返信の生成に失敗しました（GEMINI_API_KEYを確認してください）',
@@ -184,22 +197,101 @@ function handleBlockAction(payload) {
     return;
   }
 
-  // Gmail下書き作成
-  const replyTo = emailFrom.match(/<(.+)>/)?.[1] || emailFrom;
-  const draftSubject = emailSubject.startsWith('Re:') ? emailSubject : `Re: ${emailSubject}`;
+  // モーダルのprivate_metadataにメール情報を保存（3000文字制限）
+  const metadata = JSON.stringify({
+    messageId: actionData.messageId,
+    subject: emailSubject,
+    from: emailFrom,
+    date: emailDate,
+    body: emailBody.slice(0, 800),
+    responseUrl: responseUrl,
+  });
+
+  // Slackに編集モーダルを開く
+  openEditModal(triggerId, generatedReply, emailSubject, metadata);
+}
+
+// ============================================================
+// 編集モーダルを開く
+// ============================================================
+
+function openEditModal(triggerId, generatedReply, subject, metadata) {
+  const token = PROPS.getProperty('SLACK_BOT_TOKEN');
+
+  const modal = {
+    type: 'modal',
+    callback_id: 'draft_edit_modal',
+    private_metadata: metadata,
+    title: { type: 'plain_text', text: 'AI返信下書きの編集' },
+    submit: { type: 'plain_text', text: 'Gmailに下書き保存' },
+    close: { type: 'plain_text', text: 'キャンセル' },
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*件名:* Re: ${subject}\n\nAIが生成した返信文を編集できます。`,
+        },
+      },
+      {
+        type: 'input',
+        block_id: 'reply_block',
+        label: { type: 'plain_text', text: '返信文' },
+        element: {
+          type: 'plain_text_input',
+          action_id: 'reply_text',
+          multiline: true,
+          initial_value: generatedReply,
+        },
+      },
+    ],
+  };
+
+  const response = UrlFetchApp.fetch('https://slack.com/api/views.open', {
+    method: 'post',
+    contentType: 'application/json; charset=utf-8',
+    headers: { Authorization: `Bearer ${token}` },
+    payload: JSON.stringify({ trigger_id: triggerId, view: modal }),
+    muteHttpExceptions: true,
+  });
+
+  const result = JSON.parse(response.getContentText());
+  if (!result.ok) {
+    console.log(`モーダルオープンエラー: ${result.error}`);
+  }
+}
+
+// ============================================================
+// モーダル送信：Gmail下書きを作成
+// ============================================================
+
+function handleViewSubmission(payload) {
+  const metadata = JSON.parse(payload.view.private_metadata);
+  const editedReply = payload.view.state.values.reply_block.reply_text.value;
+
+  const replyTo = metadata.from.match(/<(.+)>/)?.[1] || metadata.from;
+  const draftSubject = metadata.subject.startsWith('Re:')
+    ? metadata.subject
+    : `Re: ${metadata.subject}`;
+
+  // 引用返信フォーマット（元のメールを末尾に追加）
+  const quotedBody = buildQuotedReply(editedReply, metadata.from, metadata.date, metadata.subject, metadata.body);
+
   try {
-    GmailApp.createDraft(replyTo, draftSubject, draftBody);
+    GmailApp.createDraft(replyTo, draftSubject, quotedBody);
   } catch (err) {
-    postToResponseUrl(responseUrl, {
+    console.log(`下書き作成エラー: ${err.toString()}`);
+    // モーダルを閉じてエラー通知
+    postToResponseUrl(metadata.responseUrl, {
       replace_original: false,
       text: '❌ Gmail下書きの作成に失敗しました',
     });
-    return;
+    return ContentService.createTextOutput(JSON.stringify({ response_action: 'clear' }))
+      .setMimeType(ContentService.MimeType.JSON);
   }
 
-  // 完了通知
-  const preview = draftBody.substring(0, 600);
-  postToResponseUrl(responseUrl, {
+  // Slackに完了通知
+  postToResponseUrl(metadata.responseUrl, {
     replace_original: false,
     blocks: [
       {
@@ -213,19 +305,41 @@ function handleBlockAction(payload) {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*下書き内容（抜粋）:*\n\`\`\`${preview}${draftBody.length > 600 ? '\n...' : ''}\`\`\``,
-        },
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: '📝 <https://mail.google.com/mail/u/0/#drafts|Gmailの下書きを開く> で確認・編集して送信してください',
+          text: '📝 <https://mail.google.com/mail/u/0/#drafts|Gmailの下書きを開く> で確認・送信してください',
         },
       },
     ],
   });
+
+  // モーダルを閉じる
+  return ContentService.createTextOutput(JSON.stringify({ response_action: 'clear' }))
+    .setMimeType(ContentService.MimeType.JSON);
 }
+
+// ============================================================
+// 引用返信フォーマット生成
+// ============================================================
+
+function buildQuotedReply(replyText, fromAddress, date, subject, originalBody) {
+  const quotedLines = originalBody
+    .split('\n')
+    .map(line => `> ${line}`)
+    .join('\n');
+
+  return `${replyText}
+
+
+--- 元のメール ---
+差出人: ${fromAddress}
+日時: ${date}
+件名: ${subject}
+
+${quotedLines}`;
+}
+
+// ============================================================
+// Slackのresponse_urlへの送信
+// ============================================================
 
 function postToResponseUrl(responseUrl, payload) {
   try {
@@ -241,7 +355,7 @@ function postToResponseUrl(responseUrl, payload) {
 }
 
 // ============================================================
-// Gemini API（無料枠: 15 req/min, 1500 req/day）
+// Gemini API
 // ============================================================
 
 function generateReplyWithGemini(subject, from, body) {
@@ -295,7 +409,7 @@ ${body}
 }
 
 // ============================================================
-// 処理済みメールID管理（既読にしないので重複防止に使用）
+// 処理済みメールID管理
 // ============================================================
 
 function getProcessedIds() {
