@@ -163,13 +163,17 @@ function handleBlockAction(payload) {
 
   const actionData = JSON.parse(action.value);
 
-  // 処理中をSlackに通知
-  postToResponseUrl(responseUrl, {
-    replace_original: false,
-    text: `⏳ *${actionData.subject}* の返信文を生成中です...`,
-  });
+  // ① まず「生成中」モーダルをすぐ開く（trigger_idは3秒以内に使う必要があるため）
+  const loadingViewId = openLoadingModal(triggerId, actionData.subject);
+  if (!loadingViewId) {
+    postToResponseUrl(responseUrl, {
+      replace_original: false,
+      text: '❌ モーダルを開けませんでした',
+    });
+    return;
+  }
 
-  // メール本文を再取得（フル版）
+  // ② メール本文を再取得（フル版）
   let emailSubject = actionData.subject;
   let emailFrom = actionData.from;
   let emailDate = actionData.date;
@@ -180,24 +184,18 @@ function handleBlockAction(payload) {
     emailSubject = message.getSubject();
     emailFrom = message.getFrom();
   } catch (err) {
-    postToResponseUrl(responseUrl, {
-      replace_original: false,
-      text: '❌ メールの取得に失敗しました',
-    });
+    updateModalWithError(loadingViewId, 'メールの取得に失敗しました');
     return;
   }
 
-  // Gemini APIで返信文生成
+  // ③ Gemini APIで返信文生成
   const generatedReply = generateReplyWithGemini(emailSubject, emailFrom, emailBody);
   if (!generatedReply) {
-    postToResponseUrl(responseUrl, {
-      replace_original: false,
-      text: '❌ AI返信の生成に失敗しました（GEMINI_API_KEYを確認してください）',
-    });
+    updateModalWithError(loadingViewId, 'AI返信の生成に失敗しました');
     return;
   }
 
-  // モーダルのprivate_metadataにメール情報を保存（3000文字制限）
+  // ④ モーダルを編集可能な状態に更新
   const metadata = JSON.stringify({
     messageId: actionData.messageId,
     subject: emailSubject,
@@ -207,15 +205,51 @@ function handleBlockAction(payload) {
     responseUrl: responseUrl,
   });
 
-  // Slackに編集モーダルを開く
-  openEditModal(triggerId, generatedReply, emailSubject, metadata);
+  updateModalWithReply(loadingViewId, generatedReply, emailSubject, metadata);
 }
 
 // ============================================================
-// 編集モーダルを開く
+// モーダル操作
 // ============================================================
 
-function openEditModal(triggerId, generatedReply, subject, metadata) {
+// 「生成中」モーダルを即座に開いてview_idを返す
+function openLoadingModal(triggerId, subject) {
+  const token = PROPS.getProperty('SLACK_BOT_TOKEN');
+
+  const modal = {
+    type: 'modal',
+    callback_id: 'draft_edit_modal',
+    title: { type: 'plain_text', text: 'AI返信下書きの編集' },
+    close: { type: 'plain_text', text: 'キャンセル' },
+    blocks: [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `⏳ *${subject}*\n\nAIが返信文を生成中です...しばらくお待ちください。`,
+        },
+      },
+    ],
+  };
+
+  const response = UrlFetchApp.fetch('https://slack.com/api/views.open', {
+    method: 'post',
+    contentType: 'application/json; charset=utf-8',
+    headers: { Authorization: `Bearer ${token}` },
+    payload: JSON.stringify({ trigger_id: triggerId, view: modal }),
+    muteHttpExceptions: true,
+  });
+
+  const result = JSON.parse(response.getContentText());
+  if (!result.ok) {
+    console.log(`モーダルオープンエラー: ${result.error}`);
+    return null;
+  }
+  return result.view.id;
+}
+
+// 生成完了後、モーダルを編集可能な状態に更新
+function updateModalWithReply(viewId, generatedReply, subject, metadata) {
   const token = PROPS.getProperty('SLACK_BOT_TOKEN');
 
   const modal = {
@@ -247,18 +281,44 @@ function openEditModal(triggerId, generatedReply, subject, metadata) {
     ],
   };
 
-  const response = UrlFetchApp.fetch('https://slack.com/api/views.open', {
+  const response = UrlFetchApp.fetch('https://slack.com/api/views.update', {
     method: 'post',
     contentType: 'application/json; charset=utf-8',
     headers: { Authorization: `Bearer ${token}` },
-    payload: JSON.stringify({ trigger_id: triggerId, view: modal }),
+    payload: JSON.stringify({ view_id: viewId, view: modal }),
     muteHttpExceptions: true,
   });
 
   const result = JSON.parse(response.getContentText());
   if (!result.ok) {
-    console.log(`モーダルオープンエラー: ${result.error}`);
+    console.log(`モーダル更新エラー: ${result.error}`);
   }
+}
+
+// エラー時にモーダルを更新
+function updateModalWithError(viewId, message) {
+  const token = PROPS.getProperty('SLACK_BOT_TOKEN');
+
+  const modal = {
+    type: 'modal',
+    callback_id: 'draft_edit_modal',
+    title: { type: 'plain_text', text: 'エラー' },
+    close: { type: 'plain_text', text: '閉じる' },
+    blocks: [
+      {
+        type: 'section',
+        text: { type: 'mrkdwn', text: `❌ ${message}` },
+      },
+    ],
+  };
+
+  UrlFetchApp.fetch('https://slack.com/api/views.update', {
+    method: 'post',
+    contentType: 'application/json; charset=utf-8',
+    headers: { Authorization: `Bearer ${token}` },
+    payload: JSON.stringify({ view_id: viewId, view: modal }),
+    muteHttpExceptions: true,
+  });
 }
 
 // ============================================================
