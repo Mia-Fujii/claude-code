@@ -279,6 +279,17 @@ function updateModalWithReply(viewId, generatedReply, subject, metadata) {
           initial_value: generatedReply,
         },
       },
+      {
+        type: 'input',
+        block_id: 'schedule_block',
+        optional: true,
+        label: { type: 'plain_text', text: '送信予約日時（空欄の場合は下書き保存のみ）' },
+        hint: { type: 'plain_text', text: '日時を選択すると指定時刻に自動送信されます' },
+        element: {
+          type: 'datetimepicker',
+          action_id: 'schedule_time',
+        },
+      },
     ],
   };
 
@@ -329,20 +340,21 @@ function updateModalWithError(viewId, message) {
 function handleViewSubmission(payload) {
   const metadata = JSON.parse(payload.view.private_metadata);
   const editedReply = payload.view.state.values.reply_block.reply_text.value;
+  const scheduleUnix = payload.view.state.values.schedule_block?.schedule_time?.selected_date_time;
 
   const replyTo = metadata.from.match(/<(.+)>/)?.[1] || metadata.from;
   const draftSubject = metadata.subject.startsWith('Re:')
     ? metadata.subject
     : `Re: ${metadata.subject}`;
 
-  // 引用返信フォーマット（元のメールを末尾に追加）
   const quotedBody = buildQuotedReply(editedReply, metadata.from, metadata.date, metadata.subject, metadata.body);
 
+  // Gmail下書きを作成
+  let draft;
   try {
-    GmailApp.createDraft(replyTo, draftSubject, quotedBody);
+    draft = GmailApp.createDraft(replyTo, draftSubject, quotedBody);
   } catch (err) {
     console.log(`下書き作成エラー: ${err.toString()}`);
-    // モーダルを閉じてエラー通知
     postToResponseUrl(metadata.responseUrl, {
       replace_original: false,
       text: '❌ Gmail下書きの作成に失敗しました',
@@ -351,28 +363,54 @@ function handleViewSubmission(payload) {
       .setMimeType(ContentService.MimeType.JSON);
   }
 
-  // Slackに完了通知
-  postToResponseUrl(metadata.responseUrl, {
-    replace_original: false,
-    blocks: [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `✅ *Gmail下書きを作成しました*\n*宛先:* ${replyTo}\n*件名:* ${draftSubject}`,
-        },
-      },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: '📝 <https://mail.google.com/mail/u/0/#drafts|Gmailの下書きを開く> で確認・送信してください',
-        },
-      },
-    ],
-  });
+  // 送信予約日時が指定されている場合
+  if (scheduleUnix) {
+    const sendAt = new Date(scheduleUnix * 1000);
+    scheduleEmailSend(draft.getId(), sendAt, draftSubject, replyTo);
 
-  // モーダルを閉じる
+    const sendAtJp = formatJapaneseDate(sendAt);
+    postToResponseUrl(metadata.responseUrl, {
+      replace_original: false,
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `⏰ *送信予約しました*\n*宛先:* ${replyTo}\n*件名:* ${draftSubject}\n*送信予定:* ${sendAtJp}`,
+          },
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '📝 <https://mail.google.com/mail/u/0/#drafts|Gmailの下書き> から送信前に確認できます',
+          },
+        },
+      ],
+    });
+  } else {
+    // 下書き保存のみ
+    postToResponseUrl(metadata.responseUrl, {
+      replace_original: false,
+      blocks: [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `✅ *Gmail下書きを作成しました*\n*宛先:* ${replyTo}\n*件名:* ${draftSubject}`,
+          },
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: '📝 <https://mail.google.com/mail/u/0/#drafts|Gmailの下書きを開く> で確認・送信してください',
+          },
+        },
+      ],
+    });
+  }
+
   return ContentService.createTextOutput(JSON.stringify({ response_action: 'clear' }))
     .setMimeType(ContentService.MimeType.JSON);
 }
@@ -419,6 +457,69 @@ function postToResponseUrl(responseUrl, payload) {
     });
   } catch (err) {
     console.log(`response_url送信エラー: ${err.toString()}`);
+  }
+}
+
+// ============================================================
+// 送信予約
+// ============================================================
+
+function scheduleEmailSend(draftId, sendAt, subject, replyTo) {
+  // 送信予約情報を保存
+  const scheduled = getScheduledSends();
+  scheduled.push({
+    draftId: draftId,
+    sendAt: sendAt.getTime(),
+    subject: subject,
+    replyTo: replyTo,
+  });
+  PROPS.setProperty('SCHEDULED_SENDS', JSON.stringify(scheduled));
+
+  // 指定日時に1回だけ実行されるトリガーを作成
+  ScriptApp.newTrigger('processScheduledSends')
+    .timeBased()
+    .at(sendAt)
+    .create();
+}
+
+function processScheduledSends() {
+  const now = new Date().getTime();
+  const scheduled = getScheduledSends();
+  const remaining = [];
+
+  for (const item of scheduled) {
+    if (item.sendAt <= now + 60000) { // 1分の余裕を持つ
+      try {
+        const draft = GmailApp.getDraft(item.draftId);
+        draft.send();
+        console.log(`送信完了: ${item.subject} → ${item.replyTo}`);
+      } catch (err) {
+        console.log(`送信エラー: ${err.toString()}`);
+      }
+    } else {
+      remaining.push(item);
+    }
+  }
+
+  PROPS.setProperty('SCHEDULED_SENDS', JSON.stringify(remaining));
+
+  // 使用済みトリガーを削除
+  ScriptApp.getProjectTriggers().forEach(trigger => {
+    if (trigger.getHandlerFunction() === 'processScheduledSends') {
+      const triggerUid = trigger.getUniqueId();
+      // 残りの予約がなければトリガーを削除
+      if (remaining.length === 0) {
+        ScriptApp.deleteTrigger(trigger);
+      }
+    }
+  });
+}
+
+function getScheduledSends() {
+  try {
+    return JSON.parse(PROPS.getProperty('SCHEDULED_SENDS') || '[]');
+  } catch {
+    return [];
   }
 }
 
