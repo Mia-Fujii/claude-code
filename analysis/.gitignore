@@ -1,0 +1,4 @@
+customers_utf8.csv
+# 完全版xlsxは「データ」シートに顧客PIIを含むためコミットしない
+customer_analysis_store168.xlsx
+__pycache__/
