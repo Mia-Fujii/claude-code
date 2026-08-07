@@ -96,7 +96,7 @@ for row in src_ws.iter_rows():
 
 # --- Sheet: タスク管理 (NEW column layout) ---
 src_ws = wb_src["タスク管理"]
-dst_ws = wb.create_sheet("タスク管理")
+dst_ws = wb.create_sheet("スケジュール")
 
 # 新しい列構成
 NEW_HEADERS = [
@@ -212,8 +212,8 @@ print(f"wrote {OUT}")
 # Verify
 wb2 = openpyxl.load_workbook(OUT)
 print(f"Sheets: {wb2.sheetnames}")
-ws = wb2["タスク管理"]
-print(f"タスク管理: {ws.max_row} rows x {ws.max_column} cols")
+ws = wb2["スケジュール"]
+print(f"スケジュール: {ws.max_row} rows x {ws.max_column} cols")
 # Print first few rows to verify
 for r in range(1, 4):
     vals = [ws.cell(row=r, column=c).value for c in range(1, 7)]
