@@ -133,10 +133,10 @@ def add_section_title(title):
     r += 1
 
 add_section_title("── Zoomリンク・プール（共通Zoom用）──")
-add_setting("グルコン共通ZoomURL",             "", "🟡 若菜先生グルコン全回で使う1本")
-add_setting("グルコン共通ミーティングID",       "", "🟡")
-add_setting("キャッチアップマンデー共通ZoomURL","", "🟡 若菜先生マンデー全回で使う1本")
-add_setting("キャッチアップマンデー共通ミーティングID","", "🟡")
+add_setting("グルコン共通ZoomURL",             "https://us02web.zoom.us/j/83540214061", "若菜先生グルコン全回で使う1本")
+add_setting("グルコン共通ミーティングID",       "835 4021 4061", "")
+add_setting("キャッチアップマンデー共通ZoomURL","https://us02web.zoom.us/j/84912148179", "若菜先生マンデー全回で使う1本")
+add_setting("キャッチアップマンデー共通ミーティングID","849 1214 8179", "")
 add_setting("オリエンテーションZoomURL",        "https://us02web.zoom.us/j/82603439180", "既存テンプレから移設")
 add_setting("オリエンテーションミーティングID", "826 0343 9180", "")
 
