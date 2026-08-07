@@ -151,7 +151,9 @@ for src_row_idx in range(2, src_ws.max_row + 1):
         src_ws.cell(row=src_row_idx, column=OLD["dDayBefore"]).value,# I
         src_ws.cell(row=src_row_idx, column=OLD["dQuestion"]).value, # J
         src_ws.cell(row=src_row_idx, column=OLD["dDayOf"]).value,    # K
-        src_ws.cell(row=src_row_idx, column=OLD["dArchive"]).value,  # L
+        # L アーカイブ送付: 動画配信以外は全部 新formula (D列=開始時間参照)
+        ("-" if "動画配信" in str(content or "")
+         else f'=IF(IFERROR(TIMEVALUE(D{new_row_idx}),D{new_row_idx})>TIME(13,0,0),B{new_row_idx}+1,B{new_row_idx})'),
         src_ws.cell(row=src_row_idx, column=OLD["id"]).value,        # M ID
         src_ws.cell(row=src_row_idx, column=OLD["zoomSource"]).value,# N
         src_ws.cell(row=src_row_idx, column=OLD["zoomUrl"]).value,   # O
