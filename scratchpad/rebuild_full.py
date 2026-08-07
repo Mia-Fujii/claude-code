@@ -98,17 +98,16 @@ for row in src_ws.iter_rows():
 src_ws = wb_src["タスク管理"]
 dst_ws = wb.create_sheet("スケジュール")
 
-# 新しい列構成
+# 新しい列構成 (会員サイト/事前フォームURL は削除 → 17列)
 NEW_HEADERS = [
     "内容", "日程", "日程短",           # 3
     "開始時間", "終了時間", "担当者",    # 3
     "メールセット", "メール3日前", "メール前日", "質問まとめ",  # 4
     "メール当日", "アーカイブ送付",       # 2
-    "会員サイト（アーカイブ用）",         # 1
     "ID", "Zoomソース", "Zoomリンク",   # 3
-    "ミーティングID", "事前フォームURL", "ステータス",  # 3
+    "ミーティングID", "ステータス",       # 2
 ]
-NEW_WIDTHS = [22, 12, 10, 10, 10, 18, 12, 12, 12, 10, 12, 12, 25, 8, 20, 40, 16, 30, 12]
+NEW_WIDTHS = [22, 12, 10, 10, 10, 18, 12, 12, 12, 10, 12, 12, 8, 20, 40, 16, 12]
 
 for i, w in enumerate(NEW_WIDTHS, 1):
     dst_ws.column_dimensions[get_column_letter(i)].width = w
@@ -143,7 +142,7 @@ for src_row_idx in range(2, src_ws.max_row + 1):
     values = [
         content,                                                     # A 内容
         src_ws.cell(row=src_row_idx, column=OLD["date"]).value,      # B 日程
-        f'=IF(B{new_row_idx}="","",TEXT(B{new_row_idx},"M/d（aaa）"))',  # C 日程短 (formula)
+        f'=IF(B{new_row_idx}="","",TEXT(B{new_row_idx},"M/d（aaa）"))',  # C 日程短
         start_time,                                                   # D 開始時間
         end_time,                                                     # E 終了時間
         src_ws.cell(row=src_row_idx, column=OLD["manager"]).value,   # F 担当者
@@ -153,13 +152,11 @@ for src_row_idx in range(2, src_ws.max_row + 1):
         src_ws.cell(row=src_row_idx, column=OLD["dQuestion"]).value, # J
         src_ws.cell(row=src_row_idx, column=OLD["dDayOf"]).value,    # K
         src_ws.cell(row=src_row_idx, column=OLD["dArchive"]).value,  # L
-        src_ws.cell(row=src_row_idx, column=OLD["memberSite"]).value,# M
-        src_ws.cell(row=src_row_idx, column=OLD["id"]).value,        # N ID
-        src_ws.cell(row=src_row_idx, column=OLD["zoomSource"]).value,# O
-        src_ws.cell(row=src_row_idx, column=OLD["zoomUrl"]).value,   # P
-        src_ws.cell(row=src_row_idx, column=OLD["meetingId"]).value, # Q
-        src_ws.cell(row=src_row_idx, column=OLD["formUrl"]).value,   # R
-        src_ws.cell(row=src_row_idx, column=OLD["status"]).value or "未実施",  # S
+        src_ws.cell(row=src_row_idx, column=OLD["id"]).value,        # M ID
+        src_ws.cell(row=src_row_idx, column=OLD["zoomSource"]).value,# N
+        src_ws.cell(row=src_row_idx, column=OLD["zoomUrl"]).value,   # O
+        src_ws.cell(row=src_row_idx, column=OLD["meetingId"]).value, # P
+        src_ws.cell(row=src_row_idx, column=OLD["status"]).value or "未実施",  # Q
     ]
 
     for col_i, v in enumerate(values, 1):
@@ -168,11 +165,11 @@ for src_row_idx in range(2, src_ws.max_row + 1):
         cell.alignment = WRAP
         cell.border = BORDER
         # 色付け
-        if col_i == 3:  # 日程短 (auto)
+        if col_i == 3:  # 日程短 (auto formula)
             cell.fill = REF_FILL
-        elif col_i in (14,):  # ID (auto)
+        elif col_i == 13:  # ID (auto)
             cell.fill = REF_FILL
-        elif col_i in (15, 18):  # Zoomソース, 事前フォームURL (auto-assigned)
+        elif col_i == 14:  # Zoomソース (auto-assigned)
             cell.fill = NEW_FILL
         else:
             cell.fill = INPUT_FILL
@@ -181,7 +178,7 @@ for src_row_idx in range(2, src_ws.max_row + 1):
 
 # ヘッダのコメント
 dst_ws.cell(row=1, column=3).comment = Comment("=IF(B2=\"\",\"\",TEXT(B2,\"M/d（aaa）\")) で自動計算", "system")
-dst_ws.cell(row=1, column=15).comment = Comment(
+dst_ws.cell(row=1, column=14).comment = Comment(
     "選択肢：若菜グルコン共通 / 若菜マンデー共通 / 個別 / 未定(サポート講師待ち) / Zoomなし",
     "system"
 )
