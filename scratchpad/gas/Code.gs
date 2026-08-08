@@ -246,8 +246,7 @@ function formatCatchupWedDetail(ev) {
   if (!ev) return '';
   const dateStr = formatJPDate(ev.date);
   const timeStr = formatTimeRangeWithMinutes(ev.startTime, ev.endTime);
-  const teacher = ev.manager ? ` ${ev.manager}` : '';
-  return `${dateStr}${timeStr}${teacher}`;
+  return `${dateStr}${timeStr}`;
 }
 
 function substitute(s, vars) {
