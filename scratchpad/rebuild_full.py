@@ -98,16 +98,16 @@ for row in src_ws.iter_rows():
 src_ws = wb_src["タスク管理"]
 dst_ws = wb.create_sheet("スケジュール")
 
-# 新しい列構成 (会員サイト/事前フォームURL は削除 → 17列)
+# 新しい列構成 (会員サイト/事前フォームURL/ID を削除 → 16列)
 NEW_HEADERS = [
     "内容", "日程", "日程短",           # 3
     "開始時間", "終了時間", "担当者",    # 3
     "メールセット", "メール3日前", "メール前日", "質問まとめ",  # 4
     "メール当日", "アーカイブ送付",       # 2
-    "ID", "Zoomソース", "Zoomリンク",   # 3
+    "Zoomソース", "Zoomリンク",         # 2
     "ミーティングID", "ステータス",       # 2
 ]
-NEW_WIDTHS = [22, 12, 10, 10, 10, 18, 12, 12, 12, 10, 12, 12, 8, 20, 40, 16, 12]
+NEW_WIDTHS = [22, 12, 10, 10, 10, 18, 12, 12, 12, 10, 12, 12, 20, 40, 16, 12]
 
 for i, w in enumerate(NEW_WIDTHS, 1):
     dst_ws.column_dimensions[get_column_letter(i)].width = w
@@ -154,11 +154,10 @@ for src_row_idx in range(2, src_ws.max_row + 1):
         # L アーカイブ送付: 動画配信以外は全部 新formula (D列=開始時間参照)
         ("-" if "動画配信" in str(content or "")
          else f'=IF(IFERROR(TIMEVALUE(D{new_row_idx}),D{new_row_idx})>TIME(13,0,0),B{new_row_idx}+1,B{new_row_idx})'),
-        src_ws.cell(row=src_row_idx, column=OLD["id"]).value,        # M ID
-        src_ws.cell(row=src_row_idx, column=OLD["zoomSource"]).value,# N
-        src_ws.cell(row=src_row_idx, column=OLD["zoomUrl"]).value,   # O
-        src_ws.cell(row=src_row_idx, column=OLD["meetingId"]).value, # P
-        src_ws.cell(row=src_row_idx, column=OLD["status"]).value or "未実施",  # Q
+        src_ws.cell(row=src_row_idx, column=OLD["zoomSource"]).value,# M
+        src_ws.cell(row=src_row_idx, column=OLD["zoomUrl"]).value,   # N
+        src_ws.cell(row=src_row_idx, column=OLD["meetingId"]).value, # O
+        src_ws.cell(row=src_row_idx, column=OLD["status"]).value or "未実施",  # P
     ]
 
     for col_i, v in enumerate(values, 1):
@@ -169,9 +168,7 @@ for src_row_idx in range(2, src_ws.max_row + 1):
         # 色付け
         if col_i == 3:  # 日程短 (auto formula)
             cell.fill = REF_FILL
-        elif col_i == 13:  # ID (auto)
-            cell.fill = REF_FILL
-        elif col_i == 14:  # Zoomソース (auto-assigned)
+        elif col_i == 13:  # Zoomソース (auto-assigned)
             cell.fill = NEW_FILL
         else:
             cell.fill = INPUT_FILL
@@ -180,7 +177,7 @@ for src_row_idx in range(2, src_ws.max_row + 1):
 
 # ヘッダのコメント
 dst_ws.cell(row=1, column=3).comment = Comment("=IF(B2=\"\",\"\",TEXT(B2,\"M/d（aaa）\")) で自動計算", "system")
-dst_ws.cell(row=1, column=14).comment = Comment(
+dst_ws.cell(row=1, column=13).comment = Comment(
     "選択肢：若菜グルコン共通 / 若菜マンデー共通 / 個別 / 未定(サポート講師待ち) / Zoomなし",
     "system"
 )
