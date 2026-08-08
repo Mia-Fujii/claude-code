@@ -1,9 +1,10 @@
 /**
- * Shine A Light 20期 事務局オートメーション (v3 final)
+ * Shine A Light 20期 事務局オートメーション (v4)
  *
  * ・イベント日の5日前に「3日前・前日・当日・アーカイブ」4本を一気に下書き
  * ・メールセット(質問募集)はその予定日に単独で下書き
  * ・Chatworkに未読①付きで報告、TODO付き
+ * ・動画配信メールに次回動画配信日/次回キャッチアップWed情報を自動挿入
  */
 
 // ============= 定数 =============
@@ -19,22 +20,9 @@ const BATCH_TIMINGS = ['3日前', '前日', '当日', 'アーカイブ'];
 const BATCH_DAYS_BEFORE = 5;
 
 const COL = {
-  content: 0,       // A 内容
-  date: 1,          // B 日程
-  dateShort: 2,     // C 日程短
-  startTime: 3,     // D 開始時間
-  endTime: 4,       // E 終了時間
-  manager: 5,       // F 担当者
-  dMailSet: 6,      // G メールセット
-  d3Days: 7,        // H メール3日前
-  dDayBefore: 8,    // I メール前日
-  dQuestion: 9,     // J 質問まとめ
-  dDayOf: 10,       // K メール当日
-  dArchive: 11,     // L アーカイブ送付
-  zoomSource: 12,   // M Zoomソース
-  zoomUrl: 13,      // N Zoomリンク
-  meetingId: 14,    // O ミーティングID
-  status: 15,       // P ステータス
+  content: 0, date: 1, dateShort: 2, startTime: 3, endTime: 4, manager: 5,
+  dMailSet: 6, d3Days: 7, dDayBefore: 8, dQuestion: 9, dDayOf: 10, dArchive: 11,
+  zoomSource: 12, zoomUrl: 13, meetingId: 14, status: 15,
 };
 
 
@@ -62,7 +50,7 @@ function testForDate(yyyymmdd) {
 
 function test_todayDryRun()          { dryRunToday(); }
 function test_0620_grulconBatch()    { testForDate('2026-06-20'); }
-function test_0614_catchWedMailSet() { testForDate('2026-06-14'); }
+function test_0610_1stLecture()      { testForDate('2026-06-10'); }  // 第1回動画配信 6/15 5日前
 function test_0612_catchWedBatch()   { testForDate('2026-06-12'); }
 function test_0614_beginnerBatch()   { testForDate('2026-06-14'); }
 
@@ -90,7 +78,7 @@ function processTargetDate(dateStr, dryRun) {
 
     const daysUntil = daysDiff(today, event.date);
     if (daysUntil === BATCH_DAYS_BEFORE) {
-      const drafts = buildBatchDrafts(event, templates, config);
+      const drafts = buildBatchDrafts(event, templates, config, events);
       if (drafts.length > 0) {
         drafts.forEach(d => planned.push({
           today: dateStr, event: event.content, timing: d.timing, subject: d.populated.subject,
@@ -105,7 +93,7 @@ function processTargetDate(dateStr, dryRun) {
     if (event.dMailSet instanceof Date && sameDay(event.dMailSet, today)) {
       const tpl = findTemplate(templates, event.content, 'メールセット');
       if (tpl) {
-        const populated = populateTemplate(tpl, event, config);
+        const populated = populateTemplate(tpl, event, config, events);
         const flags = detectFlags(tpl, event);
         planned.push({
           today: dateStr, event: event.content, timing: 'メールセット', subject: populated.subject,
@@ -120,12 +108,12 @@ function processTargetDate(dateStr, dryRun) {
   return { planned, created };
 }
 
-function buildBatchDrafts(event, templates, config) {
+function buildBatchDrafts(event, templates, config, allEvents) {
   const drafts = [];
   for (const timing of BATCH_TIMINGS) {
     const tpl = findTemplate(templates, event.content, timing);
     if (!tpl) continue;
-    const populated = populateTemplate(tpl, event, config);
+    const populated = populateTemplate(tpl, event, config, allEvents);
     const flags = detectFlags(tpl, event);
     const scheduledDate = getScheduledDate(event, timing);
     drafts.push({ timing, populated, flags, scheduledDate });
@@ -218,9 +206,20 @@ function normalize(s) {
   return String(s || '').replace(/\s+/g, '').trim();
 }
 
-function populateTemplate(tpl, event, config) {
+function findNextEventByPattern(events, afterDate, pattern) {
+  return events
+    .filter(e => e.date instanceof Date && e.date > afterDate && pattern.test(e.content))
+    .sort((a, b) => a.date - b.date)[0];
+}
+
+function populateTemplate(tpl, event, config, allEvents) {
   const startHour = parseHour(event.startTime);
   const endHour   = parseHour(event.endTime);
+
+  // 次回イベント検索(動画配信メールで使用)
+  const nextLecture = allEvents ? findNextEventByPattern(allEvents, event.date, /動画配信/) : null;
+  const nextCatchupWed = allEvents ? findNextEventByPattern(allEvents, event.date, /キャッチアップウェンズデー/) : null;
+
   const vars = {
     '期':                 config['期'] ? String(config['期']).replace(/期$/, '') : '',
     '日程':               formatJPDate(event.date),
@@ -232,12 +231,23 @@ function populateTemplate(tpl, event, config) {
     'zoomリンク':         resolveZoomUrl(event, config),
     '事前フォームURL':    resolveFormUrlByEvent(event, config),
     '会員サイト':         config['会員サイト'] || '',
+    '課題提出先リンクまとめ': config['課題提出先リンクまとめURL'] || '',
     'フォーム締切表記':   formatFormDeadline(event.date),
     'イベント名':         event.content,
+    '次回動画配信日':     nextLecture ? formatJPDate(nextLecture.date) : '',
+    '次回キャッチアップウェンズデー詳細': formatCatchupWedDetail(nextCatchupWed),
     '第1回目動画配信日':  config['第1回目動画配信日'] || '',
     '第1回動画配信3日後': config['第1回動画配信3日後'] || '',
   };
   return { subject: substitute(tpl.subject, vars), body: substitute(tpl.body, vars) };
+}
+
+function formatCatchupWedDetail(ev) {
+  if (!ev) return '';
+  const dateStr = formatJPDate(ev.date);
+  const timeStr = formatTimeRangeWithMinutes(ev.startTime, ev.endTime);
+  const teacher = ev.manager ? ` ${ev.manager}` : '';
+  return `${dateStr}${timeStr}${teacher}`;
 }
 
 function substitute(s, vars) {
@@ -292,6 +302,30 @@ function parseHour(t) {
   const s = String(t || '');
   const m = s.match(/(\d+)/);
   return m ? parseInt(m[1], 10) : null;
+}
+
+function parseTimeParts(t) {
+  if (t instanceof Date) return { hour: t.getHours(), minute: t.getMinutes() };
+  const s = String(t || '');
+  const m = s.match(/(\d+)[:：](\d+)/);
+  if (m) return { hour: parseInt(m[1], 10), minute: parseInt(m[2], 10) };
+  const m2 = s.match(/(\d+)/);
+  return m2 ? { hour: parseInt(m2[1], 10), minute: 0 } : null;
+}
+
+function formatHourMin(hour, minute) {
+  if (hour == null) return '';
+  return minute > 0 ? `${hour}時${minute}分` : `${hour}時`;
+}
+
+function formatTimeRangeWithMinutes(startTime, endTime) {
+  const s = parseTimeParts(startTime);
+  if (!s) return '';
+  const e = parseTimeParts(endTime);
+  const startPart = formatHourMin(s.hour, s.minute);
+  if (!e) return `${startPart}〜`;
+  const endPart = formatHourMin(e.hour, e.minute);
+  return `${startPart}〜${endPart}`;
 }
 
 function formatJPDate(d) {
@@ -443,4 +477,37 @@ function postChatwork(token, roomId, body) {
     muteHttpExceptions: true,
   });
   Logger.log('Chatwork送信結果: %s', res.getResponseCode());
+}
+
+
+// ============= トリガー管理 =============
+
+function setupDailyTrigger() {
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === 'runDaily') {
+      ScriptApp.deleteTrigger(t);
+      Logger.log('既存トリガー削除');
+    }
+  });
+  ScriptApp.newTrigger('runDaily')
+    .timeBased()
+    .everyDays(1)
+    .atHour(7)
+    .create();
+  Logger.log('✅ 毎朝7時トリガー設定完了');
+}
+
+function listTriggers() {
+  const triggers = ScriptApp.getProjectTriggers();
+  if (triggers.length === 0) { Logger.log('トリガーはまだ設定されていません'); return; }
+  triggers.forEach(t => Logger.log('関数: %s / タイプ: %s', t.getHandlerFunction(), t.getEventType()));
+}
+
+function deleteDailyTrigger() {
+  ScriptApp.getProjectTriggers().forEach(t => {
+    if (t.getHandlerFunction() === 'runDaily') {
+      ScriptApp.deleteTrigger(t);
+      Logger.log('runDailyトリガー削除完了');
+    }
+  });
 }
