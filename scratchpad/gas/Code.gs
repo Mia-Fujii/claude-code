@@ -56,6 +56,12 @@ function test_0614_beginnerBatch()   { testForDate('2026-06-14'); }
 
 // 本番実行用ショートカット
 function run_0620_grulconBatch()     { processTargetDate('2026-06-20', false); }
+function run_0610_1stLecture()       { processTargetDate('2026-06-10', false); }  // 第1回動画配信 6/15
+function run_0624_2ndLecture()       { processTargetDate('2026-06-24', false); }  // 第2回動画配信 6/29
+function run_0708_3rdLecture()       { processTargetDate('2026-07-08', false); }  // 第3回動画配信 7/13
+function run_0722_4thLecture()       { processTargetDate('2026-07-22', false); }  // 第4回動画配信 7/27
+function run_0805_5thLecture()       { processTargetDate('2026-08-05', false); }  // 第5回動画配信 8/10
+function run_0819_6thLecture()       { processTargetDate('2026-08-19', false); }  // 第6回動画配信 8/24
 
 
 // ============= 処理本体 =============
