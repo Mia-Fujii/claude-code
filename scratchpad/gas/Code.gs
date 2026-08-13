@@ -229,6 +229,7 @@ function populateTemplate(tpl, event, config, allEvents) {
   const vars = {
     '期':                 config['期'] ? String(config['期']).replace(/期$/, '') : '',
     '日程':               formatJPDate(event.date),
+    '日程月日':           formatMonthDay(event.date),
     '日程短':             event.dateShort || formatShortDate(event.date),
     '開始時':             startHour != null ? `${startHour}時` : '',
     '開始時H':            startHour != null ? String(startHour) : '',
@@ -341,6 +342,11 @@ function formatJPDate(d) {
 function formatShortDate(d) {
   if (!(d instanceof Date)) return String(d || '');
   return `${d.getMonth() + 1}/${d.getDate()}（${YOBI[d.getDay()]}）`;
+}
+
+function formatMonthDay(d) {
+  if (!(d instanceof Date)) return String(d || '');
+  return `${d.getMonth() + 1}月${d.getDate()}日`;
 }
 
 function formatTimeRange(startHour, endHour) {
