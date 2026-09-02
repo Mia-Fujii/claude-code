@@ -24,10 +24,13 @@
   --wash:#D5EFF6;
   --gold:#A0742A;
   --gold-wash:#F3EADA;
-  --band-bg:#05303D;
-  --band-ink:#E2F1F5;
-  --band-soft:#93BDC9;
-  --band-line:#1A4B58;
+  --band-bg:#00AFCC;
+  --band-ink:#04323C;
+  --band-soft:#063D49;
+  --band-line:#0995B0;
+  --band-panel:rgba(255,255,255,.22);
+  --band-chip:#04323C;
+  --band-chip-ink:#E9F8FB;
   --shadow:0 1px 0 rgba(7,46,56,.05), 0 12px 30px -22px rgba(7,46,56,.45);
 
   --f-display:"Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", serif;
@@ -52,10 +55,13 @@
     --wash:#10333D;
     --gold:#DDB264;
     --gold-wash:#2B2417;
-    --band-bg:#03141A;
-    --band-ink:#E2F1F5;
-    --band-soft:#8FB6BF;
-    --band-line:#16373F;
+    --band-bg:#0A6E84;
+    --band-ink:#EAF8FB;
+    --band-soft:#D3ECF2;
+    --band-line:#1E8AA2;
+    --band-panel:rgba(255,255,255,.08);
+    --band-chip:#EAF8FB;
+    --band-chip-ink:#04323C;
     --shadow:0 1px 0 rgba(0,0,0,.3), 0 14px 34px -24px rgba(0,0,0,.9);
   }
 }
@@ -73,10 +79,13 @@
   --wash:#10333D;
   --gold:#DDB264;
   --gold-wash:#2B2417;
-  --band-bg:#03141A;
-  --band-ink:#E2F1F5;
-  --band-soft:#8FB6BF;
-  --band-line:#16373F;
+  --band-bg:#0A6E84;
+  --band-ink:#EAF8FB;
+  --band-soft:#D3ECF2;
+  --band-line:#1E8AA2;
+  --band-panel:rgba(255,255,255,.08);
+  --band-chip:#EAF8FB;
+  --band-chip-ink:#04323C;
   --shadow:0 1px 0 rgba(0,0,0,.3), 0 14px 34px -24px rgba(0,0,0,.9);
 }
 
@@ -182,8 +191,10 @@ h1 .h1-sub{display:block;font-size:clamp(1.05rem,2.9vw,1.45rem);font-weight:600;
 .btn--ghost{border-color:var(--line);color:var(--ink);background:var(--surface)}
 .btn--ghost:hover{border-color:var(--accent);color:var(--accent-deep)}
 .btn:hover{transform:translateY(-1px)}
-.btn--band.btn--ghost{background:transparent;color:var(--band-ink);border-color:var(--band-line)}
-.btn--band.btn--ghost:hover{border-color:var(--band-soft);color:var(--band-ink)}
+.btn--band.btn--ghost{background:transparent;color:var(--band-ink);border-color:var(--band-ink)}
+.btn--band.btn--ghost:hover{background:var(--band-panel);border-color:var(--band-ink);color:var(--band-ink)}
+.band .btn--primary,.final .btn--primary{background:var(--band-chip);color:var(--band-chip-ink);border-color:var(--band-chip)}
+.band .btn--primary:hover,.final .btn--primary:hover{background:transparent;color:var(--band-ink);border-color:var(--band-ink)}
 
 /* ---------- lists ---------- */
 .checklist{list-style:none;margin:2rem 0 0;padding:0;display:grid;gap:1px;background:var(--hair);border-block:1px solid var(--hair)}
@@ -210,14 +221,17 @@ h1 .h1-sub{display:block;font-size:clamp(1.05rem,2.9vw,1.45rem);font-weight:600;
   .day{grid-template-columns:11rem 1fr;gap:2rem;align-items:start}
 }
 .day__when{display:flex;flex-direction:column;gap:.35rem}
-.day__no{font-family:var(--f-label);font-size:2rem;line-height:1;letter-spacing:.06em;color:var(--accent)}
+.day__no{
+  align-self:flex-start;font-family:var(--f-label);font-size:1.3rem;line-height:1;letter-spacing:.12em;
+  background:var(--band-chip);color:var(--band-chip-ink);padding:.4rem .7rem .35rem;border-radius:2px;
+}
 .day__date{font-size:.95rem;color:var(--band-soft);letter-spacing:.02em}
 .day__title{font-family:var(--f-display);font-weight:600;font-size:clamp(1.1rem,3vw,1.4rem);line-height:1.6}
 .day__sub{margin-top:.5rem;color:var(--band-soft);font-size:.95rem}
 
 .outcome{
   margin-top:2.75rem;padding:1.6rem 1.5rem;border:1px solid var(--band-line);
-  background:rgba(255,255,255,.03);
+  background:var(--band-panel);
 }
 .outcome p{font-family:var(--f-display);font-size:clamp(1.05rem,2.8vw,1.3rem);line-height:1.8}
 
@@ -269,6 +283,7 @@ h1 .h1-sub{display:block;font-size:clamp(1.05rem,2.9vw,1.45rem);font-weight:600;
 .profile__body{margin-top:1.25rem;font-size:.95rem;line-height:2.05;color:var(--ink)}
 .facts{list-style:none;margin:1.5rem 0 0;padding:0;display:grid;gap:1px;background:var(--hair);border:1px solid var(--hair)}
 @media(min-width:600px){.facts{grid-template-columns:1fr 1fr}}
+@media(min-width:860px){.facts{grid-template-columns:1fr}}
 .facts li{background:var(--surface);padding:.9rem 1rem}
 .facts b{display:block;font-family:var(--f-label);font-size:1.45rem;letter-spacing:.04em;color:var(--accent-deep);line-height:1.2;font-variant-numeric:tabular-nums}
 .facts b small{font-family:var(--f-body);font-size:.72rem;font-weight:500;letter-spacing:.02em;margin-left:.15em}
