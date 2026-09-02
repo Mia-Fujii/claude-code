@@ -7,371 +7,300 @@
 <meta name="description" content="ピアノレッスンに取り入れながら音大につなげる指導法3Days。ソルフェージュ合格率100%の指導者・溝渕ナオコによるオンライン講座。">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=Shippori+Mincho+B1:wght@600;800&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap">
 <style>
-/* ---------- tokens ---------- */
+/* ============ tokens ============ */
 :root{
   color-scheme: light;
-  --paper:#EDF5F8;
-  --surface:#FFFFFF;
-  --surface-2:#F4FAFC;
-  --ink:#072E38;
-  --ink-soft:#476A73;
-  --line:#B9DDE6;
-  --hair:#D8EBF0;
-  --accent:#00AFCC;
-  --accent-deep:#046C82;
-  --wash:#D5EFF6;
-  --gold:#A0742A;
-  --gold-wash:#F3EADA;
-  --band-bg:#00AFCC;
-  --band-ink:#04323C;
-  --band-soft:#063D49;
-  --band-line:#0995B0;
-  --band-panel:rgba(255,255,255,.22);
-  --band-chip:#04323C;
-  --band-chip-ink:#E9F8FB;
-  --shadow:0 1px 0 rgba(7,46,56,.05), 0 12px 30px -22px rgba(7,46,56,.45);
-
-  --f-display:"Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", serif;
-  --f-body:"Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
-  --f-label:"Barlow Condensed", "Zen Kaku Gothic New", sans-serif;
-
-  --measure:34rem;
-  --wide:64rem;
+  --tq:#00AFCC;            /* メインカラー */
+  --tq-deep:#007F96;       /* 小さな文字・ホバー用 */
+  --tq-tint:#E6F7FB;       /* 淡い面 */
+  --tq-tint2:#F4FCFD;      /* セクション背景 */
+  --tq-line:#B7E7F1;
+  --band:#00AFCC;          /* 帯の背景 */
+  --band-ink:#FFFFFF;      /* 帯の上の文字 */
+  --ink:#12333B;
+  --ink-soft:#5A7B83;
+  --card:#FFFFFF;
+  --page:#FFFFFF;
+  --shadow:0 10px 30px -20px rgba(0,90,110,.55);
+  --radius:12px;
+  --f:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",sans-serif;
+  --f-en:"Outfit","Zen Kaku Gothic New",sans-serif;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     color-scheme: dark;
-    --paper:#061A20;
-    --surface:#0D2831;
-    --surface-2:#113039;
-    --ink:#E2F1F5;
-    --ink-soft:#9BBCC5;
-    --line:#21474F;
-    --hair:#1A3A42;
-    --accent:#35C8E4;
-    --accent-deep:#86E2F2;
-    --wash:#10333D;
-    --gold:#DDB264;
-    --gold-wash:#2B2417;
-    --band-bg:#0A6E84;
-    --band-ink:#EAF8FB;
-    --band-soft:#D3ECF2;
-    --band-line:#1E8AA2;
-    --band-panel:rgba(255,255,255,.08);
-    --band-chip:#EAF8FB;
-    --band-chip-ink:#04323C;
-    --shadow:0 1px 0 rgba(0,0,0,.3), 0 14px 34px -24px rgba(0,0,0,.9);
+    --tq:#2EC6E0; --tq-deep:#8AE2F1; --tq-tint:#0F2A31; --tq-tint2:#0A2027; --tq-line:#1E4A54;
+    --band:#0A7C93; --band-ink:#FFFFFF;
+    --ink:#E6F3F6; --ink-soft:#A0BEC5; --card:#0E262C; --page:#071A1F;
+    --shadow:0 10px 30px -20px rgba(0,0,0,.9);
   }
 }
 :root[data-theme="dark"]{
   color-scheme: dark;
-  --paper:#061A20;
-  --surface:#0D2831;
-  --surface-2:#113039;
-  --ink:#E2F1F5;
-  --ink-soft:#9BBCC5;
-  --line:#21474F;
-  --hair:#1A3A42;
-  --accent:#35C8E4;
-  --accent-deep:#86E2F2;
-  --wash:#10333D;
-  --gold:#DDB264;
-  --gold-wash:#2B2417;
-  --band-bg:#0A6E84;
-  --band-ink:#EAF8FB;
-  --band-soft:#D3ECF2;
-  --band-line:#1E8AA2;
-  --band-panel:rgba(255,255,255,.08);
-  --band-chip:#EAF8FB;
-  --band-chip-ink:#04323C;
-  --shadow:0 1px 0 rgba(0,0,0,.3), 0 14px 34px -24px rgba(0,0,0,.9);
+  --tq:#2EC6E0; --tq-deep:#8AE2F1; --tq-tint:#0F2A31; --tq-tint2:#0A2027; --tq-line:#1E4A54;
+  --band:#0A7C93; --band-ink:#FFFFFF;
+  --ink:#E6F3F6; --ink-soft:#A0BEC5; --card:#0E262C; --page:#071A1F;
+  --shadow:0 10px 30px -20px rgba(0,0,0,.9);
 }
 
-/* ---------- base ---------- */
+/* ============ base ============ */
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{
-  margin:0;
-  background:var(--paper);
-  color:var(--ink);
-  font-family:var(--f-body);
-  font-size:16px;
-  line-height:1.9;
+  margin:0;background:var(--page);color:var(--ink);
+  font-family:var(--f);font-size:16px;line-height:1.95;font-weight:400;
   font-feature-settings:"palt" 1;
 }
 img{max-width:100%;display:block}
-a{color:inherit}
-h1,h2,h3{font-family:var(--f-display);font-weight:800;line-height:1.45;text-wrap:balance;margin:0}
+a{color:var(--tq-deep)}
 p{margin:0}
-:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:2px}
+h1,h2,h3{margin:0;line-height:1.55;font-weight:900;text-wrap:balance;word-break:auto-phrase;line-break:strict}
+:focus-visible{outline:3px solid var(--tq);outline-offset:3px;border-radius:4px}
 
-.wrap{width:min(100% - 2.5rem, var(--wide));margin-inline:auto}
-.col{width:min(100%, var(--measure));margin-inline:auto}
-section{padding-block:clamp(3.5rem,8vw,6rem)}
+.wrap{width:min(100% - 2rem, 60rem);margin-inline:auto}
+.narrow{width:min(100%, 44rem);margin-inline:auto}
+section{padding-block:clamp(3.25rem,7vw,5.5rem)}
+.tinted{background:var(--tq-tint2)}
 
-/* recurring device: five-line staff */
-.staff{height:15px;background:repeating-linear-gradient(to bottom,var(--line) 0 1px,transparent 1px 4px);opacity:.85}
-.staff--band{background-image:repeating-linear-gradient(to bottom,var(--band-line) 0 1px,transparent 1px 4px);opacity:1}
+/* section heading */
+.head{text-align:center;margin-bottom:clamp(2rem,4vw,2.75rem)}
+.head__en{
+  font-family:var(--f-en);font-size:.8rem;letter-spacing:.28em;text-transform:uppercase;
+  color:var(--tq-deep);font-weight:600;display:block;margin-bottom:.6rem;
+}
+.head h2{font-size:clamp(1.4rem,4.6vw,2.1rem);color:var(--tq)}
+.head__line{width:2.5rem;height:4px;background:var(--tq);border-radius:2px;margin:1rem auto 0}
+.head p{margin-top:1rem;color:var(--ink-soft);font-size:.95rem}
 
-.eyebrow{
-  font-family:var(--f-label);font-size:.86rem;font-weight:600;letter-spacing:.22em;
-  text-transform:uppercase;color:var(--accent-deep);margin:0 0 .9rem;
-  display:flex;align-items:center;gap:.6rem;
+/* ============ hero ============ */
+.hero{background:var(--band);color:var(--band-ink)}
+.hero__inner{display:grid;gap:clamp(1.75rem,4vw,3rem);grid-template-columns:1fr;padding-block:clamp(2.5rem,6vw,4rem)}
+@media(min-width:920px){.hero__inner{grid-template-columns:1.1fr .9fr;align-items:center}}
+.hero__badge{
+  display:inline-block;font-family:var(--f-en);font-size:.8rem;letter-spacing:.24em;font-weight:600;
+  border:1.5px solid rgba(255,255,255,.85);border-radius:999px;padding:.35rem 1rem;
 }
-.eyebrow::before{content:"";width:1.6rem;height:1px;background:currentColor;flex:none}
-.eyebrow--band{color:var(--band-soft)}
-
-.sec-title{font-size:clamp(1.45rem,4.4vw,2.05rem);letter-spacing:.01em}
-.sec-lead{color:var(--ink-soft);margin-top:1rem;font-size:.98rem}
-
-/* ---------- hero ---------- */
-.hero{
-  position:relative;overflow:hidden;background:var(--surface);
-  border-bottom:1px solid var(--hair);padding-block:clamp(2.5rem,6vw,4rem) clamp(3rem,7vw,4.5rem);
+.hero h1{font-size:clamp(1.75rem,5.6vw,2.9rem);margin-top:1.1rem;letter-spacing:.01em}
+.hero__sub{
+  font-size:clamp(1rem,2.8vw,1.35rem);font-weight:700;margin-top:.85rem;line-height:1.7;
+  word-break:auto-phrase;
 }
-.hero::before{
-  content:"";position:absolute;inset:0;pointer-events:none;
-  background:
-    radial-gradient(120% 90% at 88% 0%, var(--wash) 0%, transparent 58%),
-    repeating-linear-gradient(to bottom, var(--hair) 0 1px, transparent 1px 34px);
-  opacity:.5;
-}
-.hero__inner{position:relative;display:grid;gap:clamp(2rem,5vw,3.5rem);grid-template-columns:1fr}
-@media(min-width:900px){.hero__inner{grid-template-columns:1.15fr .85fr;align-items:center}}
-.hero__kicker{
-  font-family:var(--f-label);font-size:.9rem;letter-spacing:.24em;text-transform:uppercase;
-  color:var(--accent-deep);font-weight:600;
-}
-.hero__mark{
-  display:inline-flex;align-items:center;gap:.55rem;border:1px solid var(--line);
-  border-radius:999px;padding:.3rem .85rem;background:var(--surface);
-}
-h1{font-size:clamp(1.75rem,5.6vw,2.85rem);margin-top:1.25rem;letter-spacing:.005em}
-h1 .nb{white-space:nowrap}
-h1 .h1-sub{display:block;font-size:clamp(1.05rem,2.9vw,1.45rem);font-weight:600;margin-top:.7rem;line-height:1.6;color:var(--ink)}
 .hero__pitch{
-  margin-top:1.6rem;font-size:clamp(1rem,2.4vw,1.13rem);font-weight:500;line-height:2;
-  padding-left:1.1rem;border-left:3px solid var(--accent);
+  margin-top:1.5rem;background:rgba(255,255,255,.16);border-radius:var(--radius);
+  padding:1rem 1.15rem;font-weight:700;font-size:clamp(1rem,2.5vw,1.1rem);line-height:1.85;
 }
-.hero__meta{
-  margin-top:1.9rem;display:flex;flex-wrap:wrap;gap:.5rem .9rem;
-  font-family:var(--f-label);letter-spacing:.08em;font-size:1rem;color:var(--ink-soft);
+.hero__dates{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1.4rem;font-family:var(--f-en);font-weight:500}
+.hero__dates span{
+  background:#fff;color:var(--tq-deep);border-radius:999px;padding:.3rem .9rem;font-size:.95rem;letter-spacing:.04em;
 }
-.hero__meta b{font-weight:600;color:var(--ink)}
-.hero__meta span{display:inline-flex;align-items:center;gap:.45rem}
-.hero__meta span+span::before{content:"";width:1px;height:1em;background:var(--line);margin-right:.5rem}
+.hero__time{margin-top:.9rem;font-size:.95rem;font-weight:500}
 
-/* photo slot */
-.photo{position:relative}
-.photo__frame{
-  aspect-ratio:4/5;border:1px solid var(--line);background:var(--surface-2);
-  display:grid;place-content:center;gap:.5rem;text-align:center;padding:1.5rem;
-  box-shadow:var(--shadow);
+/* photo */
+.shot{margin:0}
+.shot__frame{
+  aspect-ratio:4/5;border-radius:var(--radius);overflow:hidden;background:rgba(255,255,255,.18);
+  border:2px solid rgba(255,255,255,.7);display:grid;place-content:center;text-align:center;padding:1.5rem;
 }
-.photo__frame img{width:100%;height:100%;object-fit:cover}
-.photo__hint{font-size:.82rem;color:var(--ink-soft);line-height:1.7}
-.photo__hint b{display:block;font-family:var(--f-label);letter-spacing:.18em;text-transform:uppercase;color:var(--accent-deep)}
-.photo__caption{
-  margin-top:.75rem;font-size:.83rem;color:var(--ink-soft);letter-spacing:.04em;
-}
+.shot__frame img{width:100%;height:100%;object-fit:cover}
+.shot__hint{font-size:.85rem;line-height:1.8;font-weight:500}
+.shot__hint b{display:block;font-family:var(--f-en);letter-spacing:.2em;font-size:.75rem;margin-bottom:.3rem}
+.shot--light .shot__frame{background:var(--tq-tint);border-color:var(--tq-line)}
+.shot--light .shot__hint{color:var(--ink-soft)}
+.shot__cap{margin-top:.7rem;font-size:.85rem;font-weight:500}
 
-/* ---------- buttons ---------- */
-.cta-group{display:flex;flex-wrap:wrap;gap:.85rem;margin-top:1.75rem}
+/* ============ buttons ============ */
+.btns{display:flex;flex-wrap:wrap;gap:.8rem;margin-top:1.6rem;justify-content:center}
+.hero .btns{justify-content:flex-start}
 .btn{
-  display:inline-flex;flex-direction:column;align-items:flex-start;gap:.15rem;
-  padding:.95rem 1.6rem;border-radius:3px;text-decoration:none;font-weight:700;
-  border:1px solid transparent;transition:transform .15s ease, background .15s ease, color .15s ease;
-  line-height:1.5;
+  display:inline-flex;flex-direction:column;align-items:center;gap:.1rem;text-decoration:none;
+  border-radius:999px;padding:1rem 2rem;font-weight:700;font-size:1.02rem;line-height:1.5;
+  border:2px solid transparent;transition:transform .15s ease,box-shadow .15s ease,background .15s ease,color .15s ease;
 }
-.btn small{font-family:var(--f-label);font-weight:500;letter-spacing:.14em;font-size:.78rem;opacity:.8}
-.btn--primary{background:var(--accent);color:#002B33;border-color:var(--accent)}
-.btn--primary:hover{background:var(--accent-deep);color:var(--surface)}
-.btn--ghost{border-color:var(--line);color:var(--ink);background:var(--surface)}
-.btn--ghost:hover{border-color:var(--accent);color:var(--accent-deep)}
-.btn:hover{transform:translateY(-1px)}
-.btn--band.btn--ghost{background:transparent;color:var(--band-ink);border-color:var(--band-ink)}
-.btn--band.btn--ghost:hover{background:var(--band-panel);border-color:var(--band-ink);color:var(--band-ink)}
-.band .btn--primary,.final .btn--primary{background:var(--band-chip);color:var(--band-chip-ink);border-color:var(--band-chip)}
-.band .btn--primary:hover,.final .btn--primary:hover{background:transparent;color:var(--band-ink);border-color:var(--band-ink)}
+.btn small{font-family:var(--f-en);font-weight:500;font-size:.78rem;letter-spacing:.1em;opacity:.85}
+.btn:hover{transform:translateY(-2px)}
+/* 白背景の上 */
+.btn--fill{background:var(--tq);color:#fff;box-shadow:var(--shadow)}
+.btn--fill:hover{background:var(--tq-deep)}
+.btn--out{background:var(--card);color:var(--tq-deep);border-color:var(--tq)}
+.btn--out:hover{background:var(--tq-tint)}
+/* ターコイズの帯の上 */
+.on-band .btn--fill{background:#fff;color:var(--tq-deep)}
+.on-band .btn--fill:hover{background:var(--tq-tint)}
+.on-band .btn--out{background:transparent;color:#fff;border-color:#fff}
+.on-band .btn--out:hover{background:rgba(255,255,255,.16);color:#fff}
 
-/* ---------- lists ---------- */
-.checklist{list-style:none;margin:2rem 0 0;padding:0;display:grid;gap:1px;background:var(--hair);border-block:1px solid var(--hair)}
-.checklist li{background:var(--surface);padding:1.05rem 1.2rem;display:flex;gap:.85rem;align-items:flex-start;font-size:.99rem}
-.checklist li .ico{font-size:1.05rem;line-height:1.7;flex:none;filter:grayscale(.15)}
+/* ============ 悩み ============ */
+.worries{
+  list-style:none;margin:0;padding:0;background:var(--card);border-radius:var(--radius);
+  box-shadow:var(--shadow);border:1px solid var(--tq-line);overflow:hidden;
+}
+.worries li{display:flex;gap:.8rem;padding:1.05rem 1.3rem;font-size:1rem;font-weight:500;word-break:auto-phrase}
+.worries li+li{border-top:1px dashed var(--tq-line)}
+.worries .em{flex:none}
 
-.fit-list{list-style:none;margin:2rem 0 0;padding:0;display:grid;gap:.75rem}
-.fit-list li{
-  background:var(--surface);border:1px solid var(--hair);border-left:3px solid var(--accent);
-  padding:.95rem 1.15rem;font-size:.99rem;font-weight:500;
+/* ============ おすすめ ============ */
+.fits{list-style:none;margin:0;padding:0;display:grid;gap:.7rem}
+.fits li{
+  background:var(--card);border:2px solid var(--tq-line);border-radius:var(--radius);
+  padding:1rem 1.2rem;font-weight:500;
 }
 
-/* ---------- schedule band ---------- */
-.band{background:var(--band-bg);color:var(--band-ink)}
-.band .sec-title{color:var(--band-ink)}
-.band .sec-lead{color:var(--band-soft)}
-.days{margin-top:2.5rem;display:grid;gap:0}
+/* ============ スケジュール ============ */
+.days{display:grid;gap:1.1rem}
+@media(min-width:900px){.days{grid-template-columns:repeat(3,1fr)}}
 .day{
-  display:grid;grid-template-columns:1fr;gap:.35rem;padding:1.9rem 0;
-  border-top:1px solid var(--band-line);
+  background:var(--card);border-radius:var(--radius);overflow:hidden;
+  border:1px solid var(--tq-line);box-shadow:var(--shadow);display:flex;flex-direction:column;
 }
-.day:last-child{border-bottom:1px solid var(--band-line)}
-@media(min-width:800px){
-  .day{grid-template-columns:11rem 1fr;gap:2rem;align-items:start}
+.day__top{background:var(--band);color:var(--band-ink);padding:.9rem 1.2rem;display:flex;align-items:baseline;gap:.8rem;flex-wrap:wrap}
+.day__no{font-family:var(--f-en);font-size:1.3rem;font-weight:600;letter-spacing:.1em}
+.day__date{font-size:.9rem;font-weight:700}
+.day__body{padding:1.2rem 1.3rem 1.5rem}
+.day__title{font-size:1.1rem;color:var(--ink);line-height:1.65}
+.day__sub{margin-top:.6rem;color:var(--ink-soft);font-size:.9rem;line-height:1.8;word-break:auto-phrase}
+
+/* 得られること */
+.gain{
+  margin-top:2rem;background:var(--band);color:var(--band-ink);border-radius:var(--radius);
+  padding:clamp(1.4rem,3.5vw,2rem);text-align:center;
 }
-.day__when{display:flex;flex-direction:column;gap:.35rem}
-.day__no{
-  align-self:flex-start;font-family:var(--f-label);font-size:1.3rem;line-height:1;letter-spacing:.12em;
-  background:var(--band-chip);color:var(--band-chip-ink);padding:.4rem .7rem .35rem;border-radius:2px;
+.gain__en{font-family:var(--f-en);letter-spacing:.24em;text-transform:uppercase;font-size:.78rem;font-weight:600;opacity:.9}
+.gain p{margin-top:.6rem;font-size:clamp(1.05rem,2.9vw,1.3rem);font-weight:700;line-height:1.8}
+
+/* ============ 特典 ============ */
+.tier+.tier{margin-top:2.5rem}
+.tier__head{display:flex;flex-wrap:wrap;align-items:center;gap:.7rem;margin-bottom:1rem}
+.tier__pill{
+  background:var(--tq);color:#fff;border-radius:999px;padding:.3rem 1rem;font-weight:700;font-size:.9rem;
 }
-.day__date{font-size:.95rem;color:var(--band-soft);letter-spacing:.02em}
-.day__title{font-family:var(--f-display);font-weight:600;font-size:clamp(1.1rem,3vw,1.4rem);line-height:1.6}
-.day__sub{margin-top:.5rem;color:var(--band-soft);font-size:.95rem}
+.tier__name{font-weight:700;font-size:1.02rem}
+.gifts{list-style:none;margin:0;padding:0;display:grid;gap:.8rem}
+@media(min-width:820px){.gifts{grid-template-columns:1fr 1fr}}
+.gift{background:var(--card);border:1px solid var(--tq-line);border-radius:var(--radius);padding:1.1rem 1.2rem}
+.gift h3{font-size:1rem;font-weight:700;line-height:1.7}
+.gift p{margin-top:.4rem;color:var(--ink-soft);font-size:.88rem;line-height:1.8}
 
-.outcome{
-  margin-top:2.75rem;padding:1.6rem 1.5rem;border:1px solid var(--band-line);
-  background:var(--band-panel);
+/* ============ 価格 ============ */
+.price{
+  background:var(--card);border:2px solid var(--tq);border-radius:var(--radius);
+  padding:clamp(1.5rem,4vw,2.25rem);text-align:center;box-shadow:var(--shadow);
 }
-.outcome p{font-family:var(--f-display);font-size:clamp(1.05rem,2.8vw,1.3rem);line-height:1.8}
-
-/* ---------- bonuses ---------- */
-.tier{margin-top:2.5rem}
-.tier__head{display:flex;flex-wrap:wrap;align-items:baseline;gap:.7rem;padding-bottom:.7rem;border-bottom:1px solid var(--line)}
-.tier__badge{
-  font-family:var(--f-label);letter-spacing:.16em;text-transform:uppercase;font-weight:600;font-size:.8rem;
-  background:var(--gold-wash);color:var(--gold);padding:.25rem .7rem;border-radius:2px;
+.price__num{
+  font-family:var(--f-en);font-size:clamp(2.8rem,10vw,4rem);font-weight:600;color:var(--tq);
+  line-height:1.1;letter-spacing:.01em;font-variant-numeric:tabular-nums;
 }
-.tier__badge--all{background:var(--wash);color:var(--accent-deep)}
-.tier__name{font-family:var(--f-display);font-weight:600;font-size:1.05rem}
-.gifts{list-style:none;margin:1.25rem 0 0;padding:0;display:grid;gap:.9rem}
-@media(min-width:760px){.gifts{grid-template-columns:1fr 1fr}}
-.gift{background:var(--surface);border:1px solid var(--hair);padding:1.1rem 1.2rem;box-shadow:var(--shadow)}
-.gift h3{font-size:1rem;font-weight:600;line-height:1.65}
-.gift p{margin-top:.45rem;font-size:.88rem;color:var(--ink-soft);line-height:1.8}
+.price__num span{font-family:var(--f);font-size:.35em;font-weight:700;margin-left:.15em}
+.price__note{color:var(--ink-soft);font-size:.92rem;margin-top:.3rem}
+.pays{display:grid;gap:.9rem;margin-top:1.6rem;text-align:left}
+@media(min-width:720px){.pays{grid-template-columns:1fr 1fr}}
+.pay{background:var(--tq-tint);border-radius:var(--radius);padding:1.2rem;display:flex;flex-direction:column;gap:.6rem}
+.pay__name{font-weight:700;color:var(--tq-deep)}
+.pay__desc{font-size:.88rem;color:var(--ink-soft);word-break:auto-phrase}
+.pay .btn{margin-top:auto;align-self:stretch;padding-inline:1rem}
 
-/* ---------- price ---------- */
-.price{background:var(--surface);border:1px solid var(--line);padding:clamp(1.6rem,4vw,2.5rem);box-shadow:var(--shadow)}
-.price__row{display:flex;flex-wrap:wrap;align-items:baseline;gap:.6rem}
-.price__label{font-family:var(--f-label);letter-spacing:.2em;text-transform:uppercase;color:var(--ink-soft);font-size:.85rem}
-.price__value{font-family:var(--f-display);font-weight:800;font-size:clamp(2.4rem,8vw,3.4rem);letter-spacing:.01em;font-variant-numeric:tabular-nums}
-.price__value span{font-size:.42em;margin-left:.15em}
-.pay{margin-top:1.75rem;display:grid;gap:1px;background:var(--hair);border:1px solid var(--hair)}
-@media(min-width:720px){.pay{grid-template-columns:1fr 1fr}}
-.pay__cell{background:var(--surface-2);padding:1.3rem 1.35rem;display:flex;flex-direction:column;gap:.7rem}
-.pay__name{font-family:var(--f-label);letter-spacing:.16em;text-transform:uppercase;font-size:.82rem;color:var(--accent-deep);font-weight:600}
-.pay__desc{font-size:.9rem;color:var(--ink-soft)}
-.pay .btn{align-self:flex-start;margin-top:auto}
+/* ============ 声 ============ */
+.voices{display:grid;gap:1rem}
+.voice{background:var(--card);border:1px solid var(--tq-line);border-radius:var(--radius);padding:1.4rem;box-shadow:var(--shadow)}
+.voice__who{display:flex;flex-wrap:wrap;align-items:baseline;gap:.4rem .8rem;margin-bottom:.9rem}
+.voice__name{font-weight:700;color:var(--tq-deep);font-size:1.02rem}
+.voice__place{font-size:.83rem;color:var(--ink-soft)}
+.voice p{font-size:.94rem;line-height:2}
+.voice p+p{margin-top:.8rem}
 
-/* ---------- voices ---------- */
-.voices{display:grid;gap:1.1rem;margin-top:2.5rem}
-.voice{background:var(--surface);border:1px solid var(--hair);padding:1.4rem 1.4rem 1.5rem;box-shadow:var(--shadow)}
-.voice__who{
-  display:flex;flex-wrap:wrap;align-items:baseline;gap:.5rem .8rem;
-  padding-bottom:.8rem;margin-bottom:1rem;border-bottom:1px solid var(--hair);
-}
-.voice__name{font-family:var(--f-display);font-weight:600;font-size:1.02rem}
-.voice__place{font-size:.84rem;color:var(--ink-soft);letter-spacing:.03em}
-.voice p{font-size:.94rem;line-height:2;color:var(--ink)}
-.voice p+p{margin-top:.85rem}
+/* ============ プロフィール ============ */
+.profile{display:grid;gap:1.75rem}
+@media(min-width:880px){.profile{grid-template-columns:18rem 1fr;gap:2.75rem;align-items:start}}
+.profile__name{font-size:clamp(1.35rem,3.6vw,1.8rem);letter-spacing:.08em;color:var(--tq)}
+.profile__en{font-family:var(--f-en);letter-spacing:.24em;text-transform:uppercase;font-size:.78rem;color:var(--tq-deep);font-weight:600}
+.profile__text{margin-top:1rem;font-size:.94rem;line-height:2.1}
+.facts{list-style:none;margin:1.25rem 0 0;padding:0;display:grid;gap:.6rem}
+@media(min-width:520px){.facts{grid-template-columns:1fr 1fr}}
+@media(min-width:880px){.facts{grid-template-columns:1fr}}
+.facts li{background:var(--tq-tint);border-radius:10px;padding:.75rem 1rem;display:flex;align-items:baseline;gap:.7rem}
+.facts b{font-family:var(--f-en);font-size:1.5rem;font-weight:600;color:var(--tq);line-height:1.2;font-variant-numeric:tabular-nums}
+.facts b em{font-family:var(--f);font-style:normal;font-size:.6rem;font-weight:700;margin-left:.15em}
+.facts span{font-size:.85rem;color:var(--ink-soft);line-height:1.6}
 
-/* ---------- profile ---------- */
-.profile{display:grid;gap:2rem;align-items:start}
-@media(min-width:860px){.profile{grid-template-columns:20rem 1fr;gap:3rem}}
-.profile__name{font-size:clamp(1.5rem,4vw,2rem);letter-spacing:.06em}
-.profile__role{font-family:var(--f-label);letter-spacing:.18em;text-transform:uppercase;color:var(--accent-deep);font-size:.82rem;font-weight:600;margin-bottom:.5rem}
-.profile__body{margin-top:1.25rem;font-size:.95rem;line-height:2.05;color:var(--ink)}
-.facts{list-style:none;margin:1.5rem 0 0;padding:0;display:grid;gap:1px;background:var(--hair);border:1px solid var(--hair)}
-@media(min-width:600px){.facts{grid-template-columns:1fr 1fr}}
-@media(min-width:860px){.facts{grid-template-columns:1fr}}
-.facts li{background:var(--surface);padding:.9rem 1rem}
-.facts b{display:block;font-family:var(--f-label);font-size:1.45rem;letter-spacing:.04em;color:var(--accent-deep);line-height:1.2;font-variant-numeric:tabular-nums}
-.facts b small{font-family:var(--f-body);font-size:.72rem;font-weight:500;letter-spacing:.02em;margin-left:.15em}
-.facts span{font-size:.82rem;color:var(--ink-soft)}
+/* ============ 最後のCTA ============ */
+.entry{background:var(--band);color:var(--band-ink);text-align:center}
+.entry h2{font-size:clamp(1.4rem,4.6vw,2.05rem)}
+.entry__en{font-family:var(--f-en);letter-spacing:.28em;text-transform:uppercase;font-size:.8rem;font-weight:600;display:block;margin-bottom:.6rem;opacity:.9}
+.entry__meta{margin-top:1rem;font-weight:500;font-size:1rem;line-height:1.9}
+.entry__note{margin-top:1.4rem;font-size:.9rem;font-weight:500;line-height:1.9}
+.entry__note a{color:#fff}
 
-/* ---------- final CTA ---------- */
-.final{background:var(--band-bg);color:var(--band-ink);text-align:left}
-.final .sec-title{color:var(--band-ink)}
-.final__note{color:var(--band-soft);font-size:.9rem;margin-top:1.5rem;line-height:1.9}
-.final__note a{color:var(--band-ink)}
+footer{background:var(--tq-tint2);padding:2rem 0;font-size:.83rem;color:var(--ink-soft)}
+.foot{display:flex;flex-wrap:wrap;gap:.4rem 1.5rem;justify-content:space-between}
 
-footer{background:var(--paper);padding:2.5rem 0;border-top:1px solid var(--hair)}
-.foot{display:flex;flex-wrap:wrap;gap:.5rem 1.5rem;justify-content:space-between;font-size:.83rem;color:var(--ink-soft)}
-
-/* ---------- motion ---------- */
-@keyframes rise{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-.rise{animation:rise .7s cubic-bezier(.2,.7,.3,1) both}
-.rise:nth-child(2){animation-delay:.08s}
-@media (prefers-reduced-motion: reduce){
-  *{animation:none !important;transition:none !important}
-}
+@media (prefers-reduced-motion: reduce){*{transition:none !important;animation:none !important}}
 </style>
 </head>
 <body>
 
-<!-- ===== HERO ===== -->
-<header class="hero">
+<!-- ========== ヘッダー ========== -->
+<header class="hero on-band">
   <div class="wrap hero__inner">
-    <div class="rise">
-      <p class="hero__kicker"><span class="hero__mark">3 Days Online Seminar</span></p>
-      <h1>
-        <span class="nb">導入期こそ</span><span class="nb">ソルフェージュ！</span>
-        <span class="h1-sub">ピアノレッスンに取り入れながら音大につなげる指導法３Days</span>
-      </h1>
+    <div>
+      <p class="hero__badge">3 DAYS ONLINE SEMINAR</p>
+      <h1>導入期こそ<br>ソルフェージュ！</h1>
+      <p class="hero__sub">ピアノレッスンに取り入れながら音大につなげる指導法３Days</p>
       <p class="hero__pitch">ソルフェージュ合格率100%の指導者が明かす、<br>3歳から耳を育てるピアノ指導法</p>
-      <div class="hero__meta">
-        <span><b>9/29</b>・<b>9/30</b>・<b>10/1</b></span>
-        <span>各日 11:00 – 12:00</span>
-        <span>オンライン</span>
+      <div class="hero__dates">
+        <span>9/29 火</span><span>9/30 水</span><span>10/1 木</span>
       </div>
-      <div class="cta-group">
-        <a class="btn btn--primary" href="https://ws.formzu.net/fgen/S117348179/" data-sp="https://ws.formzu.net/sfgen/S117348179/">
-          お申し込みはこちら
-          <small>PayPal 一括 ／ 9,800円</small>
+      <p class="hero__time">各日 午前11時〜12時／オンライン開催</p>
+      <div class="btns">
+        <a class="btn btn--fill" href="https://ws.formzu.net/fgen/S117348179/" data-sp="https://ws.formzu.net/sfgen/S117348179/">
+          お申し込みはこちら<small>PayPal 一括 ／ 9,800円</small>
         </a>
-        <a class="btn btn--ghost" href="https://ws.formzu.net/fgen/S358703055/" data-sp="https://ws.formzu.net/sfgen/S358703055/">
-          銀行振込で申し込む
-          <small>Bank Transfer</small>
+        <a class="btn btn--out" href="https://ws.formzu.net/fgen/S358703055/" data-sp="https://ws.formzu.net/sfgen/S358703055/">
+          銀行振込で申し込む<small>Bank Transfer</small>
         </a>
       </div>
     </div>
 
-    <figure class="photo rise" style="margin:0">
-      <!-- 写真差し替え：下の <img src="..."> にプロフィール写真のURL（またはファイル名）を入れてください -->
-      <div class="photo__frame">
+    <figure class="shot">
+      <!-- 写真差し替え：下の <img src="..."> の行のコメントを外し、写真のファイル名を入れてください -->
+      <div class="shot__frame">
         <!-- <img src="profile.jpg" alt="溝渕ナオコ"> -->
-        <p class="photo__hint"><b>Photo</b>プロフィール写真をここに<br>（4:5 縦位置推奨）</p>
+        <p class="shot__hint"><b>PHOTO</b>プロフィール写真をここに<br>（4:5 縦位置推奨）</p>
       </div>
-      <figcaption class="photo__caption">溝渕 ナオコ ／ ソルフェージュ軸のピアノ指導法</figcaption>
+      <figcaption class="shot__cap">溝渕 ナオコ ／ ソルフェージュ軸のピアノ指導法</figcaption>
     </figure>
   </div>
 </header>
 
-<!-- ===== 悩み ===== -->
+<!-- ========== 悩み ========== -->
 <section>
-  <div class="wrap col">
-    <p class="eyebrow">Check</p>
-    <h2 class="sec-title">こんなお悩みありませんか？</h2>
-    <ul class="checklist">
-      <li><span class="ico">😔</span><span>ソルフェージュを取り入れたいけど、どこから始めればいいかわからない</span></li>
-      <li><span class="ico">😔</span><span>音読み・歌・リズムはやっているのに、なぜか演奏に結びついている感じがしない</span></li>
-      <li><span class="ico">😔</span><span>テキストやワークをやるが、単調な指導になっている</span></li>
-      <li><span class="ico">😔</span><span>幼児のレッスンで「何をどこまで教えるか」の基準が、自分の中でまだ曖昧</span></li>
-      <li><span class="ico">😔</span><span>「ソルフェージュも丁寧に教えています」と言いたいけど、自信を持って言えない</span></li>
-      <li><span class="ico">😔</span><span>他の教室との違いを出したいけど、何を武器にすればいいかわからない</span></li>
-      <li><span class="ico">😔</span><span>生徒が伸びないのは才能のせいなのか、自分の教え方のせいなのか、モヤモヤしている</span></li>
+  <div class="wrap narrow">
+    <div class="head">
+      <span class="head__en">Check</span>
+      <h2>こんなお悩みありませんか？</h2>
+      <div class="head__line"></div>
+    </div>
+    <ul class="worries">
+      <li><span class="em">😔</span><span>ソルフェージュを取り入れたいけど、どこから始めればいいかわからない</span></li>
+      <li><span class="em">😔</span><span>音読み・歌・リズムはやっているのに、なぜか演奏に結びついている感じがしない</span></li>
+      <li><span class="em">😔</span><span>テキストやワークをやるが、単調な指導になっている</span></li>
+      <li><span class="em">😔</span><span>幼児のレッスンで「何をどこまで教えるか」の基準が、自分の中でまだ曖昧</span></li>
+      <li><span class="em">😔</span><span>「ソルフェージュも丁寧に教えています」と言いたいけど、自信を持って言えない</span></li>
+      <li><span class="em">😔</span><span>他の教室との違いを出したいけど、何を武器にすればいいかわからない</span></li>
+      <li><span class="em">😔</span><span>生徒が伸びないのは才能のせいなのか、自分の教え方のせいなのか、モヤモヤしている</span></li>
     </ul>
   </div>
 </section>
 
-<div class="wrap"><div class="staff"></div></div>
-
-<!-- ===== おすすめ ===== -->
-<section>
-  <div class="wrap col">
-    <p class="eyebrow">For You</p>
-    <h2 class="sec-title">こんな方におすすめです</h2>
-    <ul class="fit-list">
+<!-- ========== おすすめ ========== -->
+<section class="tinted">
+  <div class="wrap narrow">
+    <div class="head">
+      <span class="head__en">For You</span>
+      <h2>こんな方におすすめです</h2>
+      <div class="head__line"></div>
+    </div>
+    <ul class="fits">
       <li>🎹 3歳〜小学校低学年の生徒さんを指導している先生</li>
       <li>🎹 「ソルフェージュは受験の時にやればいい」と思っていた先生</li>
       <li>🎹 音よみ・歌・リズム叩きはやっているけれど、それだけになっている気がする先生</li>
@@ -382,80 +311,59 @@ footer{background:var(--paper);padding:2.5rem 0;border-top:1px solid var(--hair)
   </div>
 </section>
 
-<!-- ===== スケジュール ===== -->
-<section class="band">
+<!-- ========== スケジュール ========== -->
+<section>
   <div class="wrap">
-    <div class="col" style="margin-inline:0">
-      <p class="eyebrow eyebrow--band">Schedule</p>
-      <h2 class="sec-title">講座のスケジュール</h2>
-      <p class="sec-lead">3日間で、時間配分 → 内容の設計 → 受験までのカリキュラムへと積み上げます。</p>
+    <div class="head">
+      <span class="head__en">Schedule</span>
+      <h2>講座のスケジュール</h2>
+      <div class="head__line"></div>
+      <p>3日間で、時間配分 → 内容の設計 → 受験までのカリキュラムへと積み上げます。</p>
     </div>
 
     <div class="days">
       <article class="day">
-        <div class="day__when">
-          <p class="day__no">DAY 1</p>
-          <p class="day__date">９月２９日（火）<br>午前１１時〜１２時</p>
-        </div>
-        <div>
+        <div class="day__top"><span class="day__no">DAY 1</span><span class="day__date">９月２９日（火）午前１１時〜１２時</span></div>
+        <div class="day__body">
           <h3 class="day__title">レッスン60分のうち、ソルフェージュは何分ですか？</h3>
           <p class="day__sub">〜合格率100%の教室が実践する、導入期の時間配分〜</p>
         </div>
       </article>
       <article class="day">
-        <div class="day__when">
-          <p class="day__no">DAY 2</p>
-          <p class="day__date">９月３０日（水）<br>午前１１時〜１２時</p>
-        </div>
-        <div>
+        <div class="day__top"><span class="day__no">DAY 2</span><span class="day__date">９月３０日（水）午前１１時〜１２時</span></div>
+        <div class="day__body">
           <h3 class="day__title">「なんとなくやっている」ソルフェージュ、卒業しませんか？</h3>
           <p class="day__sub">〜教本やテキストに頼っていませんか〜</p>
         </div>
       </article>
       <article class="day">
-        <div class="day__when">
-          <p class="day__no">DAY 3</p>
-          <p class="day__date">１０月１日（木）<br>午前１１時〜１２時</p>
-        </div>
-        <div>
+        <div class="day__top"><span class="day__no">DAY 3</span><span class="day__date">１０月１日（木）午前１１時〜１２時</span></div>
+        <div class="day__body">
           <h3 class="day__title">生徒が変わるたび迷っていたカリキュラム、これで解決します</h3>
           <p class="day__sub">〜導入期から受験まで、いつ・何を教えるかの設計図〜</p>
         </div>
       </article>
     </div>
 
-    <div class="outcome col" style="margin-inline:0">
-      <p class="eyebrow eyebrow--band">What you get</p>
+    <div class="gain">
+      <p class="gain__en">What you get</p>
       <p>導入期から受験まで一貫した指導力と、選ばれる教室としての専門性が身につきます。</p>
-    </div>
-
-    <div class="cta-group">
-      <a class="btn btn--primary" href="https://ws.formzu.net/fgen/S117348179/" data-sp="https://ws.formzu.net/sfgen/S117348179/">
-        3Daysに申し込む
-        <small>PayPal 一括 ／ 9,800円</small>
-      </a>
-      <a class="btn btn--ghost btn--band" href="https://ws.formzu.net/fgen/S358703055/" data-sp="https://ws.formzu.net/sfgen/S358703055/">
-        銀行振込で申し込む
-        <small>Bank Transfer</small>
-      </a>
     </div>
   </div>
 </section>
 
-<!-- ===== 特典 ===== -->
-<section>
+<!-- ========== 特典 ========== -->
+<section class="tinted">
   <div class="wrap">
-    <div class="col" style="margin-inline:0">
-      <p class="eyebrow">Bonus</p>
-      <h2 class="sec-title">お申込み特典</h2>
-      <p class="sec-lead">お申込みのタイミングで受け取れる教材が変わります。すべて、明日のレッスンからそのまま使えるものです。</p>
+    <div class="head">
+      <span class="head__en">Bonus</span>
+      <h2>お申込み特典</h2>
+      <div class="head__line"></div>
+      <p>お申込みのタイミングで受け取れる教材が変わります。</p>
     </div>
 
     <div class="tier">
-      <div class="tier__head">
-        <span class="tier__badge">先着 8名</span>
-        <span class="tier__name">先着特典　８名</span>
-      </div>
+      <div class="tier__head"><span class="tier__pill">先着特典　８名</span><span class="tier__name">お早めの方だけにお渡しします</span></div>
       <ul class="gifts">
         <li class="gift"><h3>① たたけるようになる!リズム打ちレベル表</h3><p>〜導入期から芸大受験まで、必要なリズムパターンが一目でわかる〜</p></li>
         <li class="gift"><h3>② この生徒、今どのレベル?学年別まるわかりチェックリスト</h3><p>〜聴音・新曲視唱・楽典の受験までの道のりがわかる!(桐朋・最難関校対応/段階別)〜</p></li>
@@ -466,10 +374,7 @@ footer{background:var(--paper);padding:2.5rem 0;border-top:1px solid var(--hair)
     </div>
 
     <div class="tier">
-      <div class="tier__head">
-        <span class="tier__badge">24時まで</span>
-        <span class="tier__name">２４時まで特典</span>
-      </div>
+      <div class="tier__head"><span class="tier__pill">２４時まで特典</span><span class="tier__name">当日中のお申込みで</span></div>
       <ul class="gifts">
         <li class="gift"><h3>① 聴こえた和音に、景色が浮かぶ＆気持ちが動く!カデンツイメージカード</h3><p>〜響きと絵をむすんで感じるカデンツ〜</p></li>
         <li class="gift"><h3>② お家の音（主音）さがしゲーム(度数+伴奏づけ)</h3><p>〜聴いて⇨考えて⇨弾いてみる!旋律から和声感まで一気に育つワーク〜</p></li>
@@ -477,10 +382,7 @@ footer{background:var(--paper);padding:2.5rem 0;border-top:1px solid var(--hair)
     </div>
 
     <div class="tier">
-      <div class="tier__head">
-        <span class="tier__badge tier__badge--all">全員</span>
-        <span class="tier__name">全員特典</span>
-      </div>
+      <div class="tier__head"><span class="tier__pill">全員特典</span><span class="tier__name">ご参加のみなさまへ</span></div>
       <ul class="gifts">
         <li class="gift"><h3>① 耳が育つ最初の一歩!はじめての単旋律聴音シート</h3><p>〜4小節×5問、聴く力の基礎トレーニング〜</p></li>
         <li class="gift"><h3>② 桐朋名物・手拍子つき新曲視唱ワーク(小２レベル)</h3><p>手拍子でもリズムをつかむ!はじめての手拍子つき新曲視唱ワーク(小２レベル)　〜手拍子しながら歌う、はじめの一歩〜</p></li>
@@ -490,45 +392,41 @@ footer{background:var(--paper);padding:2.5rem 0;border-top:1px solid var(--hair)
   </div>
 </section>
 
-<!-- ===== 価格 ===== -->
-<section style="padding-top:0">
-  <div class="wrap col" style="margin-inline:auto">
+<!-- ========== 価格 ========== -->
+<section>
+  <div class="wrap narrow">
+    <div class="head">
+      <span class="head__en">Price</span>
+      <h2>講座の価格</h2>
+      <div class="head__line"></div>
+    </div>
     <div class="price">
-      <p class="eyebrow">Price</p>
-      <div class="price__row">
-        <p class="price__value">9,800<span>円</span></p>
-        <p class="price__label">3Days 通し受講</p>
-      </div>
-      <div class="pay">
-        <div class="pay__cell">
-          <p class="pay__name">PayPal 一括</p>
+      <p class="price__num">9,800<span>円</span></p>
+      <p class="price__note">3Days 通し受講</p>
+      <div class="pays">
+        <div class="pay">
+          <p class="pay__name">PayPal（一括）</p>
           <p class="pay__desc">クレジットカードでのお支払いはこちらから。</p>
-          <a class="btn btn--primary" href="https://ws.formzu.net/fgen/S117348179/" data-sp="https://ws.formzu.net/sfgen/S117348179/">
-            申し込みフォームへ
-            <small>PayPal</small>
-          </a>
+          <a class="btn btn--fill" href="https://ws.formzu.net/fgen/S117348179/" data-sp="https://ws.formzu.net/sfgen/S117348179/">申し込みフォームへ<small>PayPal</small></a>
         </div>
-        <div class="pay__cell">
+        <div class="pay">
           <p class="pay__name">銀行振込</p>
           <p class="pay__desc">お振込でのお支払いはこちらから。</p>
-          <a class="btn btn--ghost" href="https://ws.formzu.net/fgen/S358703055/" data-sp="https://ws.formzu.net/sfgen/S358703055/">
-            申し込みフォームへ
-            <small>Bank Transfer</small>
-          </a>
+          <a class="btn btn--out" href="https://ws.formzu.net/fgen/S358703055/" data-sp="https://ws.formzu.net/sfgen/S358703055/">申し込みフォームへ<small>Bank Transfer</small></a>
         </div>
       </div>
     </div>
   </div>
 </section>
 
-<div class="wrap"><div class="staff"></div></div>
-
-<!-- ===== 受講生の声 ===== -->
-<section>
-  <div class="wrap col">
-    <p class="eyebrow">Voices</p>
-    <h2 class="sec-title">受講生の声</h2>
-
+<!-- ========== 受講生の声 ========== -->
+<section class="tinted">
+  <div class="wrap narrow">
+    <div class="head">
+      <span class="head__en">Voices</span>
+      <h2>受講生の声</h2>
+      <div class="head__line"></div>
+    </div>
     <div class="voices">
       <article class="voice">
         <div class="voice__who"><p class="voice__name">N先生</p><p class="voice__place">新潟県　ピアノ教室</p></div>
@@ -581,53 +479,56 @@ footer{background:var(--paper);padding:2.5rem 0;border-top:1px solid var(--hair)
   </div>
 </section>
 
-<!-- ===== プロフィール ===== -->
-<section style="background:var(--surface-2);border-top:1px solid var(--hair);border-bottom:1px solid var(--hair)">
-  <div class="wrap profile">
-    <div>
-      <figure class="photo" style="margin:0">
-        <!-- 写真差し替え：下の <img src="..."> にプロフィール写真のURLを入れてください -->
-        <div class="photo__frame">
-          <!-- <img src="profile.jpg" alt="溝渕ナオコ"> -->
-          <p class="photo__hint"><b>Photo</b>プロフィール写真をここに<br>（4:5 縦位置推奨）</p>
-        </div>
-      </figure>
-      <ul class="facts">
-        <li><b>100%</b><span>最難関校ソルフェージュ<br>指導合格率</span></li>
-        <li><b>35<small>年以上</small></b><span>桐朋学園大学附属<br>子供のための音楽教室</span></li>
-        <li><b>500<small>名以上</small></b><span>ピアノ・ソルフェージュ<br>指導実績</span></li>
-        <li><b>100<small>名以上</small></b><span>受験指導実績</span></li>
-      </ul>
+<!-- ========== プロフィール ========== -->
+<section>
+  <div class="wrap">
+    <div class="head">
+      <span class="head__en">Instructor</span>
+      <h2>講師プロフィール</h2>
+      <div class="head__line"></div>
     </div>
-    <div>
-      <p class="profile__role">Instructor</p>
-      <h2 class="profile__name">溝渕 ナオコ</h2>
-      <p class="profile__body">桐朋学園大学音楽学部演奏学科ピアノ専攻卒業、同大学研究科修了。日本演奏連盟オーディション合格を経て東京文化会館小ホールでデュオリサイタルを開催、「音楽の友」誌に好評掲載。研究科在学中より桐朋学園大学附属子供のための音楽教室のソルフェージュ講師として35年以上指導し、現在は仙川教室とお茶の水教室に勤務。ピアノ・ソルフェージュ指導は延べ500名以上、受験指導は延べ100名以上。自宅・世田谷区成城の教室は芸高・桐朋など最難関校ソルフェージュ指導合格率100％で、現在満席。聴音はできても演奏に音楽が結びつかない生徒との出会いから、2015年を機に、導入期・特に3歳から耳を育てることの重要性を確信し、よい耳を育てる「ソルフェージュ軸のピアノレッスン」を実践。直近2年間で全国1位3回、全国大会2位以下15回の実績を持ち、コンクール審査員も務め優良指導者賞も受賞。ソルフェージュ軸のピアノ指導法専門家として、オンライン講座を開講中。ソルフェージュを受験対策で終わらせず、一生ものの音楽力へとつなげられる指導者を増やすことを使命としている。</p>
+    <div class="profile">
+      <div>
+        <figure class="shot shot--light">
+          <!-- 写真差し替え：下の <img src="..."> の行のコメントを外し、写真のファイル名を入れてください -->
+          <div class="shot__frame">
+            <!-- <img src="profile.jpg" alt="溝渕ナオコ"> -->
+            <p class="shot__hint"><b>PHOTO</b>プロフィール写真をここに<br>（4:5 縦位置推奨）</p>
+          </div>
+        </figure>
+        <ul class="facts">
+          <li><b>100<em>％</em></b><span>最難関校ソルフェージュ指導合格率</span></li>
+          <li><b>35<em>年以上</em></b><span>桐朋学園大学附属 子供のための音楽教室</span></li>
+          <li><b>500<em>名以上</em></b><span>ピアノ・ソルフェージュ指導</span></li>
+          <li><b>100<em>名以上</em></b><span>受験指導</span></li>
+        </ul>
+      </div>
+      <div>
+        <p class="profile__en">Naoko Mizobuchi</p>
+        <h3 class="profile__name">溝渕 ナオコ</h3>
+        <p class="profile__text">桐朋学園大学音楽学部演奏学科ピアノ専攻卒業、同大学研究科修了。日本演奏連盟オーディション合格を経て東京文化会館小ホールでデュオリサイタルを開催、「音楽の友」誌に好評掲載。研究科在学中より桐朋学園大学附属子供のための音楽教室のソルフェージュ講師として35年以上指導し、現在は仙川教室とお茶の水教室に勤務。ピアノ・ソルフェージュ指導は延べ500名以上、受験指導は延べ100名以上。自宅・世田谷区成城の教室は芸高・桐朋など最難関校ソルフェージュ指導合格率100％で、現在満席。聴音はできても演奏に音楽が結びつかない生徒との出会いから、2015年を機に、導入期・特に3歳から耳を育てることの重要性を確信し、よい耳を育てる「ソルフェージュ軸のピアノレッスン」を実践。直近2年間で全国1位3回、全国大会2位以下15回の実績を持ち、コンクール審査員も務め優良指導者賞も受賞。ソルフェージュ軸のピアノ指導法専門家として、オンライン講座を開講中。ソルフェージュを受験対策で終わらせず、一生ものの音楽力へとつなげられる指導者を増やすことを使命としている。</p>
+      </div>
     </div>
   </div>
 </section>
 
-<!-- ===== 最後のCTA ===== -->
-<section class="final">
-  <div class="wrap col" style="margin-inline:auto">
-    <p class="eyebrow eyebrow--band">Entry</p>
-    <h2 class="sec-title">導入期こそソルフェージュ！<br>３Daysのお申し込み</h2>
-    <p class="sec-lead">９月２９日（火）・９月３０日（水）・１０月１日（木）　午前１１時〜１２時／受講料 9,800円</p>
-    <div class="cta-group">
-      <a class="btn btn--primary" href="https://ws.formzu.net/fgen/S117348179/" data-sp="https://ws.formzu.net/sfgen/S117348179/">
-        PayPal（一括）で申し込む
-        <small>Credit Card</small>
+<!-- ========== 最後のCTA ========== -->
+<section class="entry on-band">
+  <div class="wrap narrow">
+    <span class="entry__en">Entry</span>
+    <h2>導入期こそソルフェージュ！<br>３Days のお申し込み</h2>
+    <p class="entry__meta">９月２９日（火）・９月３０日（水）・１０月１日（木）<br>午前１１時〜１２時／受講料 9,800円</p>
+    <div class="btns">
+      <a class="btn btn--fill" href="https://ws.formzu.net/fgen/S117348179/" data-sp="https://ws.formzu.net/sfgen/S117348179/">
+        PayPal（一括）で申し込む<small>Credit Card</small>
       </a>
-      <a class="btn btn--ghost btn--band" href="https://ws.formzu.net/fgen/S358703055/" data-sp="https://ws.formzu.net/sfgen/S358703055/">
-        銀行振込で申し込む
-        <small>Bank Transfer</small>
+      <a class="btn btn--out" href="https://ws.formzu.net/fgen/S358703055/" data-sp="https://ws.formzu.net/sfgen/S358703055/">
+        銀行振込で申し込む<small>Bank Transfer</small>
       </a>
     </div>
-    <p class="final__note">先着特典は８名さままで。２４時まで特典もございますので、お早めにお申し込みください。<br>お問い合わせ：<a href="mailto:seijopianosol@gmail.com">seijopianosol@gmail.com</a></p>
+    <p class="entry__note">先着特典は８名さままで。２４時まで特典もございますので、お早めにお申し込みください。<br>お問い合わせ：<a href="mailto:seijopianosol@gmail.com">seijopianosol@gmail.com</a></p>
   </div>
 </section>
-
-<div class="wrap" style="padding-top:0"><div class="staff"></div></div>
 
 <footer>
   <div class="wrap foot">
