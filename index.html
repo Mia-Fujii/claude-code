@@ -12,23 +12,23 @@
 /* ---------- tokens ---------- */
 :root{
   color-scheme: light;
-  --paper:#EFF5F4;
+  --paper:#EDF5F8;
   --surface:#FFFFFF;
-  --surface-2:#F7FBFA;
-  --ink:#0B2E33;
-  --ink-soft:#496A6F;
-  --line:#C9DEDC;
-  --hair:#DCEAE8;
-  --accent:#0E9AA0;
-  --accent-deep:#0A6068;
-  --wash:#DBEFED;
+  --surface-2:#F4FAFC;
+  --ink:#072E38;
+  --ink-soft:#476A73;
+  --line:#B9DDE6;
+  --hair:#D8EBF0;
+  --accent:#00AFCC;
+  --accent-deep:#046C82;
+  --wash:#D5EFF6;
   --gold:#A0742A;
   --gold-wash:#F3EADA;
-  --band-bg:#0A3138;
-  --band-ink:#E7F4F2;
-  --band-soft:#9CC5C6;
-  --band-line:#1D4E55;
-  --shadow:0 1px 0 rgba(11,46,51,.05), 0 12px 30px -22px rgba(11,46,51,.45);
+  --band-bg:#05303D;
+  --band-ink:#E2F1F5;
+  --band-soft:#93BDC9;
+  --band-line:#1A4B58;
+  --shadow:0 1px 0 rgba(7,46,56,.05), 0 12px 30px -22px rgba(7,46,56,.45);
 
   --f-display:"Shippori Mincho B1", "Hiragino Mincho ProN", "Yu Mincho", serif;
   --f-body:"Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
@@ -40,43 +40,43 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     color-scheme: dark;
-    --paper:#07191C;
-    --surface:#0E262A;
-    --surface-2:#122E33;
-    --ink:#E4F1EF;
-    --ink-soft:#9EBCBD;
-    --line:#22484D;
-    --hair:#1B3A3F;
-    --accent:#43CFCB;
-    --accent-deep:#8FE6E1;
-    --wash:#123539;
+    --paper:#061A20;
+    --surface:#0D2831;
+    --surface-2:#113039;
+    --ink:#E2F1F5;
+    --ink-soft:#9BBCC5;
+    --line:#21474F;
+    --hair:#1A3A42;
+    --accent:#35C8E4;
+    --accent-deep:#86E2F2;
+    --wash:#10333D;
     --gold:#DDB264;
     --gold-wash:#2B2417;
-    --band-bg:#041215;
-    --band-ink:#E4F1EF;
-    --band-soft:#8FB3B5;
-    --band-line:#173C42;
+    --band-bg:#03141A;
+    --band-ink:#E2F1F5;
+    --band-soft:#8FB6BF;
+    --band-line:#16373F;
     --shadow:0 1px 0 rgba(0,0,0,.3), 0 14px 34px -24px rgba(0,0,0,.9);
   }
 }
 :root[data-theme="dark"]{
   color-scheme: dark;
-  --paper:#07191C;
-  --surface:#0E262A;
-  --surface-2:#122E33;
-  --ink:#E4F1EF;
-  --ink-soft:#9EBCBD;
-  --line:#22484D;
-  --hair:#1B3A3F;
-  --accent:#43CFCB;
-  --accent-deep:#8FE6E1;
-  --wash:#123539;
+  --paper:#061A20;
+  --surface:#0D2831;
+  --surface-2:#113039;
+  --ink:#E2F1F5;
+  --ink-soft:#9BBCC5;
+  --line:#21474F;
+  --hair:#1A3A42;
+  --accent:#35C8E4;
+  --accent-deep:#86E2F2;
+  --wash:#10333D;
   --gold:#DDB264;
   --gold-wash:#2B2417;
-  --band-bg:#041215;
-  --band-ink:#E4F1EF;
-  --band-soft:#8FB3B5;
-  --band-line:#173C42;
+  --band-bg:#03141A;
+  --band-ink:#E2F1F5;
+  --band-soft:#8FB6BF;
+  --band-line:#16373F;
   --shadow:0 1px 0 rgba(0,0,0,.3), 0 14px 34px -24px rgba(0,0,0,.9);
 }
 
@@ -177,7 +177,7 @@ h1 .h1-sub{display:block;font-size:clamp(1.05rem,2.9vw,1.45rem);font-weight:600;
   line-height:1.5;
 }
 .btn small{font-family:var(--f-label);font-weight:500;letter-spacing:.14em;font-size:.78rem;opacity:.8}
-.btn--primary{background:var(--accent);color:#04262A;border-color:var(--accent)}
+.btn--primary{background:var(--accent);color:#002B33;border-color:var(--accent)}
 .btn--primary:hover{background:var(--accent-deep);color:var(--surface)}
 .btn--ghost{border-color:var(--line);color:var(--ink);background:var(--surface)}
 .btn--ghost:hover{border-color:var(--accent);color:var(--accent-deep)}
