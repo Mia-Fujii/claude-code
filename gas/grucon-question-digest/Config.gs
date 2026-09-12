@@ -101,6 +101,11 @@ const CONFIG = {
     BLANK_LINES_BEFORE_ADDENDUM: 1,
     /** 自動処理メモをドキュメント末尾にも入れるか（既定は入れない＝Chatworkのみ） */
     INCLUDE_NOTES: false,
+    /**
+     * 作成したドキュメントを「リンクを知っている全員が閲覧可」にするか。
+     * false にすると、保存先フォルダの共有設定をそのまま引き継ぎます。
+     */
+    SHARE_ANYONE_WITH_LINK: true,
   },
 
   // ── 動作モード ─────────────────────────────────────────

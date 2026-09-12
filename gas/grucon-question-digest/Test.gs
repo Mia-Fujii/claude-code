@@ -100,6 +100,7 @@ function demoBuildSampleDocument() {
   lines.push('ドキュメント : ' + docInfo.url);
   lines.push('ファイル名   : ' + docInfo.title);
   lines.push('保存先       : ' + docInfo.path);
+  if (docInfo.sharing) lines.push('共有         : ' + docInfo.sharing.label);
   if (docInfo.createdFolders.length) {
     lines.push('※フォルダを新規作成しました: ' + docInfo.createdFolders.join(' / '));
   }
@@ -255,6 +256,7 @@ function testBuildFromAllRows(spreadsheetUrlOrId) {
   lines.push(docInfo.url);
   lines.push('ファイル名 : ' + docInfo.title);
   lines.push('保存先     : ' + docInfo.path);
+  if (docInfo.sharing) lines.push('共有       : ' + docInfo.sharing.label);
   if (docInfo.createdFolders.length) {
     lines.push('※フォルダを新規作成しました: ' + docInfo.createdFolders.join(' / '));
   }

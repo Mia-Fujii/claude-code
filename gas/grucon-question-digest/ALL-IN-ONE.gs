@@ -125,6 +125,11 @@ const CONFIG = {
     BLANK_LINES_BEFORE_ADDENDUM: 1,
     /** 自動処理メモをドキュメント末尾にも入れるか（既定は入れない＝Chatworkのみ） */
     INCLUDE_NOTES: false,
+    /**
+     * 作成したドキュメントを「リンクを知っている全員が閲覧可」にするか。
+     * false にすると、保存先フォルダの共有設定をそのまま引き継ぎます。
+     */
+    SHARE_ANYONE_WITH_LINK: true,
   },
 
   // ── 動作モード ─────────────────────────────────────────
@@ -689,6 +694,8 @@ function buildDigestDocument_(event, result, titleOverride) {
 
   doc.saveAndClose();
 
+  const sharing = applySharing_(doc.getId());
+
   return {
     url: doc.getUrl(),
     title: title,
@@ -696,7 +703,29 @@ function buildDigestDocument_(event, result, titleOverride) {
     term: target.term,
     createdFolders: createdFolders,
     isNew: res.created,
+    sharing: sharing,
   };
+}
+
+/**
+ * ドキュメントを「リンクを知っている全員が閲覧可」にする。
+ * 会社アカウントのポリシーで外部共有が禁止されている場合は失敗するため、
+ * 失敗しても処理は止めず、結果を返して通知に載せます。
+ */
+function applySharing_(fileId) {
+  if (!CONFIG.DOC.SHARE_ANYONE_WITH_LINK) {
+    return { changed: false, ok: true, label: 'フォルダの共有設定を引き継ぎ' };
+  }
+  try {
+    DriveApp.getFileById(fileId)
+      .setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    logInfo_('共有設定：リンクを知っている全員が閲覧可');
+    return { changed: true, ok: true, label: 'リンクを知っている全員が閲覧可' };
+  } catch (e) {
+    const msg = (e && e.message) ? e.message : String(e);
+    console.warn('共有設定の変更に失敗しました: ' + msg);
+    return { changed: true, ok: false, label: '⚠ 共有設定の変更に失敗（' + msg + '）' };
+  }
 }
 
 /** 空行を指定した数だけ追加 */
@@ -866,6 +895,7 @@ function buildNotificationMessage_(event, result, docInfo) {
   lines.push(docInfo.url);
   lines.push('');
   lines.push('保存先：' + docInfo.path);
+  if (docInfo.sharing) lines.push('共有　：' + docInfo.sharing.label);
   lines.push('');
 
   const s = result.stats;
@@ -1270,6 +1300,7 @@ function menuBuildPreview() {
     const out = runDigest_(event, false);
     return 'ドキュメントを作成しました。\n\n' + out.docInfo.url
       + '\n\n保存先: ' + out.docInfo.path
+      + (out.docInfo.sharing ? '\n共有  : ' + out.docInfo.sharing.label : '')
       + '\n\n── Chatworkに送られる文面 ──\n'
       + buildNotificationMessage_(event, out.result, out.docInfo);
   });
@@ -1592,6 +1623,7 @@ function demoBuildSampleDocument() {
   lines.push('ドキュメント : ' + docInfo.url);
   lines.push('ファイル名   : ' + docInfo.title);
   lines.push('保存先       : ' + docInfo.path);
+  if (docInfo.sharing) lines.push('共有         : ' + docInfo.sharing.label);
   if (docInfo.createdFolders.length) {
     lines.push('※フォルダを新規作成しました: ' + docInfo.createdFolders.join(' / '));
   }
@@ -1747,6 +1779,7 @@ function testBuildFromAllRows(spreadsheetUrlOrId) {
   lines.push(docInfo.url);
   lines.push('ファイル名 : ' + docInfo.title);
   lines.push('保存先     : ' + docInfo.path);
+  if (docInfo.sharing) lines.push('共有       : ' + docInfo.sharing.label);
   if (docInfo.createdFolders.length) {
     lines.push('※フォルダを新規作成しました: ' + docInfo.createdFolders.join(' / '));
   }

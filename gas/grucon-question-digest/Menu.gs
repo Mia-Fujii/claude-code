@@ -45,6 +45,7 @@ function menuBuildPreview() {
     const out = runDigest_(event, false);
     return 'ドキュメントを作成しました。\n\n' + out.docInfo.url
       + '\n\n保存先: ' + out.docInfo.path
+      + (out.docInfo.sharing ? '\n共有  : ' + out.docInfo.sharing.label : '')
       + '\n\n── Chatworkに送られる文面 ──\n'
       + buildNotificationMessage_(event, out.result, out.docInfo);
   });

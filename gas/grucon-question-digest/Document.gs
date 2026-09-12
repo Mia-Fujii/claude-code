@@ -106,6 +106,8 @@ function buildDigestDocument_(event, result, titleOverride) {
 
   doc.saveAndClose();
 
+  const sharing = applySharing_(doc.getId());
+
   return {
     url: doc.getUrl(),
     title: title,
@@ -113,7 +115,29 @@ function buildDigestDocument_(event, result, titleOverride) {
     term: target.term,
     createdFolders: createdFolders,
     isNew: res.created,
+    sharing: sharing,
   };
+}
+
+/**
+ * ドキュメントを「リンクを知っている全員が閲覧可」にする。
+ * 会社アカウントのポリシーで外部共有が禁止されている場合は失敗するため、
+ * 失敗しても処理は止めず、結果を返して通知に載せます。
+ */
+function applySharing_(fileId) {
+  if (!CONFIG.DOC.SHARE_ANYONE_WITH_LINK) {
+    return { changed: false, ok: true, label: 'フォルダの共有設定を引き継ぎ' };
+  }
+  try {
+    DriveApp.getFileById(fileId)
+      .setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    logInfo_('共有設定：リンクを知っている全員が閲覧可');
+    return { changed: true, ok: true, label: 'リンクを知っている全員が閲覧可' };
+  } catch (e) {
+    const msg = (e && e.message) ? e.message : String(e);
+    console.warn('共有設定の変更に失敗しました: ' + msg);
+    return { changed: true, ok: false, label: '⚠ 共有設定の変更に失敗（' + msg + '）' };
+  }
 }
 
 /** 空行を指定した数だけ追加 */

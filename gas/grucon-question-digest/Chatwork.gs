@@ -61,6 +61,7 @@ function buildNotificationMessage_(event, result, docInfo) {
   lines.push(docInfo.url);
   lines.push('');
   lines.push('保存先：' + docInfo.path);
+  if (docInfo.sharing) lines.push('共有　：' + docInfo.sharing.label);
   lines.push('');
 
   const s = result.stats;
