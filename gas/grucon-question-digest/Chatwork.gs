@@ -47,41 +47,42 @@ function buildNotificationMessage_(event, result, docInfo) {
   const settings = readSettings_();
   const mention = String(settings['Chatwork メンション先'] || '').trim();
 
+  // ── 本文 ──────────────────────────────────────────────
   const lines = [];
-  lines.push('[info][title]' + docInfo.title + '　事前質問まとめ[/title]');
-  if (mention) lines.push(mention);
-  lines.push('');
-
-  const when = formatDateJa_(event.date)
-    + (event.startTime ? ' ' + event.startTime : '')
-    + (event.endTime ? '〜' + event.endTime : '');
-  lines.push(when + ' 開催グルコンの事前質問をまとめました。');
-  lines.push('');
-  lines.push('▼ドキュメント');
+  if (mention) {
+    lines.push(mention);
+    lines.push('');
+  }
+  lines.push(docInfo.title + 'の質問まとめを作成しました。');
+  lines.push('ご確認お願いいたします！');
   lines.push(docInfo.url);
-  lines.push('');
-  lines.push('保存先：' + docInfo.path);
-  if (docInfo.sharing) lines.push('共有　：' + docInfo.sharing.label);
-  lines.push('');
 
+  // ── 補足 ──────────────────────────────────────────────
+  const notes = [];
   const s = result.stats;
-  lines.push('回答 ' + s.responseCount + '件 ／ 質問者 ' + s.personCount
+  notes.push('回答 ' + s.responseCount + '件 ／ 質問者 ' + s.personCount
     + '名 ／ 掲載 ' + s.questionCount + '件'
     + (s.duplicateCount > 0 ? '（重複 ' + s.duplicateCount + '件を除外）' : ''));
+  notes.push('保存先：' + docInfo.path);
+  if (docInfo.sharing) notes.push('共有　：' + docInfo.sharing.label);
 
   if (result.notes.length > 0) {
-    lines.push('');
-    lines.push('■ 自動処理の補足');
-    result.notes.forEach(function (n) { lines.push('・' + n); });
+    notes.push('');
+    notes.push('■ 自動処理の補足');
+    result.notes.forEach(function (n) { notes.push('・' + n); });
   }
 
   if (docInfo.createdFolders.length > 0) {
-    lines.push('');
-    lines.push('※ フォルダを新規作成しました：' + docInfo.createdFolders.join(' / '));
-    lines.push('　 期の設定が正しいかご確認ください（「基本設定」B2 ＝ ' + docInfo.term + '）');
+    notes.push('');
+    notes.push('※ フォルダを新規作成しました：' + docInfo.createdFolders.join(' / '));
+    notes.push('　 期の設定が正しいかご確認ください（「基本設定」B2 ＝ ' + docInfo.term + '）');
   }
 
+  lines.push('');
+  lines.push('[info][title]補足[/title]');
+  lines.push(notes.join('\n'));
   lines.push('[/info]');
+
   return lines.join('\n');
 }
 
