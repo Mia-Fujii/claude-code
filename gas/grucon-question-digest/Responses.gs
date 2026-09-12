@@ -5,8 +5,14 @@
 /** 回答スプレッドシートのシートを取得 */
 function getResponseSheet_() {
   const id = cfg_('RESPONSE_SPREADSHEET_ID');
-  if (!id) throw new Error('RESPONSE_SPREADSHEET_ID が未設定です。setupCreateForm() を実行するか、手動で設定してください。');
-  const ss = SpreadsheetApp.openById(id);
+  var ss;
+  if (id) {
+    ss = SpreadsheetApp.openById(id);
+  } else {
+    // 回答スプレッドシートに貼り付けている場合は、そのシートを使う
+    ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) throw new Error('RESPONSE_SPREADSHEET_ID が未設定です。setupCreateForm() を実行するか、手動で設定してください。');
+  }
   if (CONFIG.RESPONSE_SHEET_NAME) {
     const sheet = ss.getSheetByName(CONFIG.RESPONSE_SHEET_NAME);
     if (!sheet) throw new Error('回答シート「' + CONFIG.RESPONSE_SHEET_NAME + '」が見つかりません。');

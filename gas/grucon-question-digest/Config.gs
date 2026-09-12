@@ -27,8 +27,12 @@ const CONFIG = {
   /** ★グルコン事前質問フォームのID（setupCreateForm() で自動設定されます） */
   FORM_ID: '',
 
-  /** ★フォームの回答スプレッドシートのID（同上） */
-  RESPONSE_SPREADSHEET_ID: '',
+  /**
+   * ★フォームの回答スプレッドシートのID。
+   * このスクリプトを回答スプレッドシートに貼り付けている場合は
+   * 空のままでも「今開いているシート」が自動で使われます。
+   */
+  RESPONSE_SPREADSHEET_ID: '1GsKR1ZzsFo56CRDYtdCnYpDCvqahdH3TcKoMfG-3nHE',
 
   // ── マスタスプレッドシートのシート名 ───────────────────
   /** 日程シート（見つかった方を使います） */

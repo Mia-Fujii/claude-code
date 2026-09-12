@@ -3,14 +3,15 @@
  *  グルコン事前質問まとめ 自動化（全部入り 1ファイル版）
  * ═══════════════════════════════════════════════════════════════
  *
- *  Google Apps Script の「コード.gs」にこのファイルを丸ごと貼り付けてください。
- *  （ファイルを分けたい場合は、リポジトリの個別ファイル版を使ってください）
+ *  Googleフォームの「回答」スプレッドシートを開き、
+ *  拡張機能 → Apps Script → コード.gs にこれを丸ごと貼り付けてください。
  *
  *  ── まず試すこと ────────────────────────────────────────
- *    1. このコードを貼り付けて保存
- *    2. 関数 showStatus を実行 → 設定状況を確認
- *    3. 関数 demoBuildSampleDocument を実行
- *       → サンプルの質問からドキュメントが1本できます（Chatwork送信なし）
+ *    1. 貼り付けて保存（Ctrl+S / ⌘S）
+ *    2. スプレッドシートに戻って再読み込み
+ *       → 上部に「グルコン質問まとめ」メニューが出ます
+ *    3. メニュー →「① 設定状況を確認」
+ *    4. メニュー →「② テスト：この回答シート全部でドキュメント作成」
  *
  *  詳しい手順は README.md を参照してください。
  * ═══════════════════════════════════════════════════════════════
@@ -50,8 +51,12 @@ const CONFIG = {
   /** ★グルコン事前質問フォームのID（setupCreateForm() で自動設定されます） */
   FORM_ID: '',
 
-  /** ★フォームの回答スプレッドシートのID（同上） */
-  RESPONSE_SPREADSHEET_ID: '',
+  /**
+   * ★フォームの回答スプレッドシートのID。
+   * このスクリプトを回答スプレッドシートに貼り付けている場合は
+   * 空のままでも「今開いているシート」が自動で使われます。
+   */
+  RESPONSE_SPREADSHEET_ID: '1GsKR1ZzsFo56CRDYtdCnYpDCvqahdH3TcKoMfG-3nHE',
 
   // ── マスタスプレッドシートのシート名 ───────────────────
   /** 日程シート（見つかった方を使います） */
@@ -389,8 +394,14 @@ function getCollectionWindow_(eventDate) {
 /** 回答スプレッドシートのシートを取得 */
 function getResponseSheet_() {
   const id = cfg_('RESPONSE_SPREADSHEET_ID');
-  if (!id) throw new Error('RESPONSE_SPREADSHEET_ID が未設定です。setupCreateForm() を実行するか、手動で設定してください。');
-  const ss = SpreadsheetApp.openById(id);
+  var ss;
+  if (id) {
+    ss = SpreadsheetApp.openById(id);
+  } else {
+    // 回答スプレッドシートに貼り付けている場合は、そのシートを使う
+    ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) throw new Error('RESPONSE_SPREADSHEET_ID が未設定です。setupCreateForm() を実行するか、手動で設定してください。');
+  }
   if (CONFIG.RESPONSE_SHEET_NAME) {
     const sheet = ss.getSheetByName(CONFIG.RESPONSE_SHEET_NAME);
     if (!sheet) throw new Error('回答シート「' + CONFIG.RESPONSE_SHEET_NAME + '」が見つかりません。');
@@ -1196,6 +1207,126 @@ function manualOpenForm() { openForm_(); showStatus(); }
 
 /** 手動でフォームを閉じる */
 function manualCloseForm() { closeForm_(); showStatus(); }
+
+
+// ══════════════════════════════════════════════════════════════
+// Menu.gs
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * スプレッドシート上のメニュー
+ *
+ * このスクリプトをフォームの回答スプレッドシートに貼り付けている場合、
+ * シートを開くと上部に「グルコン質問まとめ」メニューが出ます。
+ * スクリプトエディタを開かずに実行できます。
+ *
+ * ※メニューが出ないときは、一度シートを再読み込みしてください。
+ */
+function onOpen() {
+  try {
+    SpreadsheetApp.getUi()
+      .createMenu('グルコン質問まとめ')
+      .addItem('① 設定状況を確認', 'menuShowStatus')
+      .addItem('② テスト：この回答シート全部でドキュメント作成', 'menuTestAllRows')
+      .addSeparator()
+      .addItem('質問まとめを作成（Chatwork送信なし）', 'menuBuildPreview')
+      .addItem('質問まとめを作成してChatworkへ送信', 'menuBuildAndNotify')
+      .addSeparator()
+      .addItem('フォームを開く', 'menuOpenForm')
+      .addItem('フォームを閉じる', 'menuCloseForm')
+      .addSeparator()
+      .addItem('Chatworkへの接続テスト', 'menuTestChatwork')
+      .addItem('自動実行トリガーを設置', 'menuInstallTriggers')
+      .addToUi();
+  } catch (e) {
+    console.warn('メニューを作れませんでした（スプレッドシートに紐づいていない可能性）: ' + e);
+  }
+}
+
+// ── メニューから呼ばれる関数 ──────────────────────────────
+
+function menuShowStatus() {
+  runFromMenu_('設定状況', function () { return showStatus(); });
+}
+
+function menuTestAllRows() {
+  runFromMenu_('テスト作成', function () { return testBuildFromAllRows(); });
+}
+
+function menuBuildPreview() {
+  runFromMenu_('質問まとめ（送信なし）', function () {
+    const event = findNextEvent_();
+    if (!event) throw new Error('今日以降のグルコンが日程シートに見つかりません。\n「スケジュール」シートの日程をご確認ください。');
+    const out = runDigest_(event, false);
+    return 'ドキュメントを作成しました。\n\n' + out.docInfo.url
+      + '\n\n保存先: ' + out.docInfo.path
+      + '\n\n── Chatworkに送られる文面 ──\n'
+      + buildNotificationMessage_(event, out.result, out.docInfo);
+  });
+}
+
+function menuBuildAndNotify() {
+  const ui = SpreadsheetApp.getUi();
+  const answer = ui.alert('確認',
+    'ドキュメントを作成し、Chatworkへ実際に送信します。よろしいですか？',
+    ui.ButtonSet.YES_NO);
+  if (answer !== ui.Button.YES) return;
+  runFromMenu_('質問まとめ＋送信', function () {
+    return 'Chatworkへ送信しました。\n\n' + manualBuildAndNotify();
+  });
+}
+
+function menuOpenForm() {
+  runFromMenu_('フォームを開く', function () {
+    openForm_();
+    return 'フォームを受付中にしました。';
+  });
+}
+
+function menuCloseForm() {
+  runFromMenu_('フォームを閉じる', function () {
+    closeForm_();
+    return 'フォームを締切にしました。';
+  });
+}
+
+function menuTestChatwork() {
+  const ui = SpreadsheetApp.getUi();
+  const answer = ui.alert('確認',
+    'Chatworkにテスト投稿を1件送ります。よろしいですか？',
+    ui.ButtonSet.YES_NO);
+  if (answer !== ui.Button.YES) return;
+  runFromMenu_('Chatwork接続テスト', function () {
+    testChatworkConnection();
+    return 'Chatworkに投稿しました。ルームを確認してください。';
+  });
+}
+
+function menuInstallTriggers() {
+  runFromMenu_('トリガー設置', function () {
+    setupInstallTriggers();
+    return '自動実行トリガーを設置しました。\n\n'
+      + '・毎日 ' + CONFIG.PLANNER_HOUR + ':00 … フォームのオープン判定\n'
+      + '・前日 ' + CONFIG.CLOSE_HOUR + ':00 … フォームの締切\n'
+      + '・前日 ' + CONFIG.NOTIFY_HOUR + ':' + CONFIG.NOTIFY_MINUTE + ' … ドキュメント作成＆Chatwork送信\n'
+      + '・毎日 ' + CONFIG.SAFETY_NET_HOUR + ':00 … 取りこぼしの救済';
+  });
+}
+
+/** メニュー実行の共通処理（結果とエラーをダイアログで見せる） */
+function runFromMenu_(label, fn) {
+  const ui = SpreadsheetApp.getUi();
+  try {
+    const message = fn();
+    ui.alert(label, String(message || '完了しました。'), ui.ButtonSet.OK);
+  } catch (err) {
+    console.error(err);
+    ui.alert('エラー：' + label,
+      (err && err.message ? err.message : String(err))
+      + '\n\n詳しくは 拡張機能 → Apps Script → 実行ログ をご確認ください。',
+      ui.ButtonSet.OK);
+  }
+}
 
 
 // ══════════════════════════════════════════════════════════════
