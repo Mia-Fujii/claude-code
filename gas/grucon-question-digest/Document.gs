@@ -49,12 +49,15 @@ function getOrCreateDoc_(folder, title) {
 
 /**
  * 質問まとめドキュメントを作成（既存があれば中身を作り直す）
+ * @param {Object} event  対象グルコン
+ * @param {Object} result buildGroups_() の結果
+ * @param {string=} titleOverride ファイル名を指定したいとき（テスト用）
  * @return {{url: string, title: string, path: string, createdFolders: Array<string>, isNew: boolean}}
  */
-function buildDigestDocument_(event, result) {
+function buildDigestDocument_(event, result, titleOverride) {
   const createdFolders = [];
   const target = resolveTargetFolder_(createdFolders);
-  const title = buildDocTitle_(event.date);
+  const title = titleOverride || buildDocTitle_(event.date);
 
   const res = getOrCreateDoc_(target.folder, title);
   const doc = res.doc;

@@ -148,8 +148,14 @@ function buildGroups_(responses) {
         + ' 件あったため、お名前の下にまとめました（2件目以降は「'
         + CONFIG.DOC.ADDENDUM_LABEL + '」として記載）');
     }
-    if (g.names.length > 1) {
-      notes.push('【要確認】お名前の表記ゆれがあります：' + g.names.join(' / ')
+    // 空白の全角/半角など、正規化して同じになる違いは報告しない
+    const distinctNames = [];
+    g.names.forEach(function (n) {
+      const k = normalizeName_(n);
+      if (distinctNames.every(function (x) { return normalizeName_(x) !== k; })) distinctNames.push(n);
+    });
+    if (distinctNames.length > 1) {
+      notes.push('【要確認】お名前の表記ゆれがあります：' + distinctNames.join(' / ')
         + '（メールアドレスが同じため同一人物として扱いました）');
     }
   });
