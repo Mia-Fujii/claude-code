@@ -158,3 +158,123 @@ function testChatworkConnection() {
   logInfo_('送信結果: ' + JSON.stringify(res));
   return res;
 }
+
+/**
+ * ★テストデータでドキュメントを作る（日付の絞り込みを無視します）
+ *
+ * 本番は「5日前00:00〜前日13:00」で絞りますが、テスト中は日程と
+ * タイムスタンプが噛み合わず全部除外されてしまうため、
+ * この関数は【シートの全行】を対象にします。
+ *
+ * 使い方：
+ *   ① スクリプトプロパティに RESPONSE_SPREADSHEET_ID を設定している場合
+ *        testBuildFromAllRows()
+ *   ② まだ設定していない場合（URLでもIDでもOK）
+ *        testBuildFromAllRows('https://docs.google.com/spreadsheets/d/xxxx/edit')
+ *
+ * Chatworkには送信しません。ログに文面が出るだけです。
+ */
+function testBuildFromAllRows(spreadsheetUrlOrId) {
+  const ss = spreadsheetUrlOrId
+    ? SpreadsheetApp.openById(extractId_(spreadsheetUrlOrId))
+    : SpreadsheetApp.openById(cfg_('RESPONSE_SPREADSHEET_ID'));
+  const sheet = CONFIG.RESPONSE_SHEET_NAME
+    ? ss.getSheetByName(CONFIG.RESPONSE_SHEET_NAME)
+    : ss.getSheets()[0];
+  if (!sheet) throw new Error('シートが見つかりません。');
+
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) throw new Error('「' + ss.getName() + '」の「' + sheet.getName() + '」にデータがありません。');
+
+  const C = CONFIG.RESPONSE_COLUMNS;
+  const maxCol = Math.max(C.timestamp, C.email, C.name, C.question);
+  if (sheet.getLastColumn() < maxCol) {
+    throw new Error('列が足りません。A:タイムスタンプ / B:メールアドレス / C:お名前 / D:ご質問 の並びを想定しています。');
+  }
+
+  const header = sheet.getRange(1, 1, 1, maxCol).getValues()[0];
+  const values = sheet.getRange(2, 1, lastRow - 1, maxCol).getValues();
+
+  const responses = [];
+  const skipped = [];
+  values.forEach(function (row, i) {
+    const question = String(row[C.question - 1] || '').trim();
+    if (!question) {
+      if (String(row[C.name - 1] || '').trim() || String(row[C.email - 1] || '').trim()) {
+        skipped.push((i + 2) + '行目（質問が空欄）');
+      }
+      return;
+    }
+    responses.push({
+      timestamp: toDate_(row[C.timestamp - 1]) || new Date(2000, 0, 1 + i),
+      email: String(row[C.email - 1] || '').trim(),
+      name: String(row[C.name - 1] || '').trim(),
+      question: question,
+      row: i + 2,
+    });
+  });
+  responses.sort(function (a, b) { return a.timestamp - b.timestamp; });
+
+  if (responses.length === 0) {
+    throw new Error('質問が入力された行が1件もありませんでした。D列（ご質問）を確認してください。');
+  }
+
+  const next = findNextEvent_();
+  const eventDate = next ? next.date : addDays_(new Date(), 3);
+  const event = next || {
+    date: eventDate,
+    dateShort: formatDateJa_(eventDate),
+    startTime: '',
+    endTime: '',
+    owner: '',
+  };
+
+  const result = buildGroups_(responses);
+  const docInfo = buildDigestDocument_(event, result, '(テスト)' + buildDocTitle_(eventDate));
+
+  const lines = [];
+  lines.push('── 読み込んだスプレッドシート ───────────────');
+  lines.push('ファイル : ' + ss.getName());
+  lines.push('シート   : ' + sheet.getName());
+  lines.push('列の対応 : A「' + header[C.timestamp - 1] + '」 / B「' + header[C.email - 1]
+    + '」 / C「' + header[C.name - 1] + '」 / D「' + header[C.question - 1] + '」');
+  lines.push('　★上の列名がタイムスタンプ／メールアドレス／お名前／ご質問 の順になっているか確認してください');
+  lines.push('読み込み : ' + responses.length + '行');
+  if (skipped.length) lines.push('スキップ : ' + skipped.join('、'));
+  lines.push('');
+  lines.push('── 集約結果 ─────────────────────────────');
+  result.groups.forEach(function (g) {
+    lines.push('■ ' + g.displayName + '（質問 ' + g.entries.length + '件'
+      + (g.duplicateCount ? ' / 重複 ' + g.duplicateCount + '件を除外' : '') + '）');
+    g.entries.forEach(function (e, i) {
+      lines.push('   ' + (i > 0 ? '追記：' : '　　　') + summarize_(e.question, 50));
+    });
+  });
+  lines.push('');
+  lines.push('── 作成したドキュメント ─────────────────');
+  lines.push(docInfo.url);
+  lines.push('ファイル名 : ' + docInfo.title);
+  lines.push('保存先     : ' + docInfo.path);
+  if (docInfo.createdFolders.length) {
+    lines.push('※フォルダを新規作成しました: ' + docInfo.createdFolders.join(' / '));
+  }
+  lines.push('');
+  lines.push('── Chatworkに送られる文面（送信はしていません） ──');
+  lines.push(buildNotificationMessage_(event, result, docInfo));
+  lines.push('────────────────────────────────────');
+  lines.push('');
+  lines.push('※この関数は日付の絞り込みを無視しています。');
+  lines.push('　本番は「5日前00:00〜前日13:00」の回答だけが対象になります。');
+
+  const out = lines.join('\n');
+  console.log(out);
+  return out;
+}
+
+/** スプレッドシート/フォームのURLからIDを取り出す（IDをそのまま渡してもOK） */
+function extractId_(urlOrId) {
+  const s = String(urlOrId || '').trim();
+  if (!s) throw new Error('スプレッドシートのURLまたはIDを渡してください。');
+  const m = s.match(/\/d\/([a-zA-Z0-9_-]{20,})/);
+  return m ? m[1] : s;
+}

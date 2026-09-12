@@ -70,6 +70,21 @@ Shine A Light講座 / {期} / グルコン / 8/20グルコン
 
 確認できたら「(サンプル)…」のドキュメントは削除してOKです。
 
+### 0-2. 自分のテストデータで試す
+
+回答シートにテストデータを入れてある場合は、こちらを使います。
+
+```
+testBuildFromAllRows('https://docs.google.com/spreadsheets/d/xxxx/edit')
+```
+
+引数にURL（またはID）を渡すと、そのシートの**全行**からドキュメントを作ります。
+
+> ⚠️ 本番は「グルコン日の5日前00:00〜前日13:00」で絞り込みますが、テスト中は
+> 日程とタイムスタンプが噛み合わず1件も残らないことが多いため、
+> **この関数だけは日付の絞り込みを無視**します。
+> 実行ログに読み込んだ列名が出るので、A/B/C/D の並びが想定通りか確認してください。
+
 ### 1. GASプロジェクトを作る
 
 1. https://script.google.com/ で新しいプロジェクトを作成
@@ -182,7 +197,8 @@ GASの定期トリガーは指定時刻から±15分ほどずれるため、締�
 | `manualBuildPreview` | ドキュメントだけ作る（Chatwork送信なし） |
 | `manualBuildAndNotify` | ドキュメントを作ってChatworkへ送る |
 | `manualOpenForm` / `manualCloseForm` | フォームを手動で開閉する |
-| `demoBuildSampleDocument` | **フォーム不要**。サンプル質問でドキュメントを1本作る |
+| `demoBuildSampleDocument` | **フォーム不要**。組み込みのサンプル質問でドキュメントを1本作る |
+| `testBuildFromAllRows` | **実際の回答シートの全行**でドキュメントを作る（日付の絞り込みなし） |
 | `manualBuildPreviewForDate` | 日付を指定して作る（例: `'2026/8/20'`）。Chatwork送信なし |
 | `testChatworkConnection` | Chatworkへの接続確認（テスト投稿を1件送ります） |
 | `setupInstallTriggers` | トリガーを設置し直す |
