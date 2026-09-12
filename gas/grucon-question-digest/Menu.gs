@@ -64,15 +64,17 @@ function menuBuildAndNotify() {
 
 function menuOpenForm() {
   runFromMenu_('フォームを開く', function () {
-    openForm_();
-    return 'フォームを受付中にしました。';
+    const r = setFormAccepting_(true);
+    return r === 'changed'
+      ? 'フォームを受付中にしました。\n\n' + getFormPublishedUrl_()
+      : 'フォームはすでに受付中です。\n\n' + getFormPublishedUrl_();
   });
 }
 
 function menuCloseForm() {
   runFromMenu_('フォームを閉じる', function () {
-    closeForm_();
-    return 'フォームを締切にしました。';
+    const r = setFormAccepting_(false);
+    return r === 'changed' ? 'フォームを締切にしました。' : 'フォームはすでに締切です。';
   });
 }
 

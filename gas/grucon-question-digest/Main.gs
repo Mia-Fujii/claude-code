@@ -51,7 +51,17 @@ function showStatus() {
   }
   lines.push('マスタSS ID           : ' + (cfg_('MASTER_SPREADSHEET_ID') || '⚠ 未設定'));
   lines.push('講座ルートフォルダID  : ' + (cfg_('COURSE_ROOT_FOLDER_ID') || '⚠ 未設定'));
-  lines.push('フォームID            : ' + (cfg_('FORM_ID') || '⚠ 未設定'));
+  try {
+    const form = getFormOrNull_();
+    if (form) {
+      lines.push('フォーム              : ' + form.getTitle());
+      lines.push('　回答用URL          : ' + form.getPublishedUrl());
+    } else {
+      lines.push('フォーム              : ⚠ 見つかりません（この回答シートに紐づいていません）');
+    }
+  } catch (e) {
+    lines.push('フォーム              : ⚠ ' + e.message);
+  }
   lines.push('回答スプレッドシートID: ' + (cfg_('RESPONSE_SPREADSHEET_ID') || '⚠ 未設定'));
 
   const props = PropertiesService.getScriptProperties();
@@ -61,7 +71,7 @@ function showStatus() {
 
   try {
     const accepting = isFormAccepting_();
-    lines.push('フォームの状態        : ' + (accepting === null ? '不明' : (accepting ? '受付中' : '締切中')));
+    lines.push('フォームの状態        : ' + (accepting === null ? '―' : (accepting ? '受付中' : '締切中')));
   } catch (e) {
     lines.push('フォームの状態        : ⚠ ' + e.message);
   }
@@ -116,8 +126,9 @@ function dailyPlanner() {
     // ① フォームのオープン（5日前）
     const openTarget = findEventByDaysAhead_(CONFIG.OPEN_DAYS_BEFORE);
     if (openTarget) {
-      openForm_();
-      logInfo_('【オープン】' + formatDateJa_(openTarget.date) + ' のグルコンに向けてフォームを開きました。');
+      if (setFormAcceptingIfAvailable_(true)) {
+        logInfo_('【オープン】' + formatDateJa_(openTarget.date) + ' のグルコンに向けてフォームを開きました。');
+      }
     }
 
     // ② 受付期間中なのに閉じていたら開け直す（取りこぼし防止）
@@ -170,7 +181,7 @@ function closeFormNow() {
       logInfo_('今日は前日ではないため、締切処理をスキップしました。');
       return;
     }
-    closeForm_();
+    setFormAcceptingIfAvailable_(false);
     updateClosedMessage_(findEventAfter_(event.date));
   } catch (err) {
     console.error(err);
@@ -202,7 +213,7 @@ function dailySafetyNet() {
 
     if (isFormAccepting_() === true) {
       logInfo_('【救済】フォームが開いたままだったため締切処理を実行します。');
-      closeForm_();
+      setFormAcceptingIfAvailable_(false);
       updateClosedMessage_(findEventAfter_(event.date));
     }
     if (!isDone_(event.date)) {
@@ -223,7 +234,7 @@ function ensureFormStateForToday_() {
   const w = getCollectionWindow_(next.date);
   const now = new Date();
   if (now >= w.start && now < w.end && isFormAccepting_() === false) {
-    openForm_();
+    setFormAcceptingIfAvailable_(true);
     logInfo_('受付期間中にフォームが閉じていたため開き直しました。');
   }
 }
