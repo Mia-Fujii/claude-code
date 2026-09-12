@@ -221,6 +221,8 @@ GASの定期トリガーは指定時刻から±15分ほどずれるため、締�
 | `DOC.BODY_FONT_SIZE` | `11` | 本文の文字サイズ |
 | `DOC.NAME_HIGHLIGHT` | `#FFE599` | お名前の背景色 |
 | `DOC.ADDENDUM_LABEL` | `追記：` | 2件目以降の見出し |
+| `DOC.BLANK_LINES_BETWEEN_PEOPLE` | `2` | 次のお名前の手前に入れる空行の数 |
+| `DOC.BLANK_LINES_BEFORE_ADDENDUM` | `1` | 「追記：」の手前に入れる空行の数 |
 | `DOC.INCLUDE_NOTES` | `false` | 自動処理メモをドキュメントにも入れるか |
 | `DRY_RUN` | `false` | `true` でChatwork送信をログ出力だけにする |
 

@@ -119,6 +119,10 @@ const CONFIG = {
     BODY_FONT_SIZE: 11,
     /** 2件目以降の質問の前に入れる見出し */
     ADDENDUM_LABEL: '追記：',
+    /** 人と人のあいだに入れる空行の数（次のお名前の手前） */
+    BLANK_LINES_BETWEEN_PEOPLE: 2,
+    /** 同じ人の「追記：」の手前に入れる空行の数 */
+    BLANK_LINES_BEFORE_ADDENDUM: 1,
     /** 自動処理メモをドキュメント末尾にも入れるか（既定は入れない＝Chatworkのみ） */
     INCLUDE_NOTES: false,
   },
@@ -653,7 +657,7 @@ function buildDigestDocument_(event, result, titleOverride) {
   }
 
   result.groups.forEach(function (g, gi) {
-    if (gi > 0) appendBlank_(body);
+    if (gi > 0) appendBlanks_(body, D.BLANK_LINES_BETWEEN_PEOPLE);
 
     // ── お名前（少し大きく・太字・黄色背景） ──
     const namePara = body.appendParagraph(g.displayName);
@@ -666,7 +670,7 @@ function buildDigestDocument_(event, result, titleOverride) {
     // ── 質問本文 ──
     g.entries.forEach(function (entry, ei) {
       if (ei > 0) {
-        appendBlank_(body);
+        appendBlanks_(body, D.BLANK_LINES_BEFORE_ADDENDUM);
         appendLine_(body, D.ADDENDUM_LABEL);
       }
       appendBodyText_(body, entry.question);
@@ -693,6 +697,12 @@ function buildDigestDocument_(event, result, titleOverride) {
     createdFolders: createdFolders,
     isNew: res.created,
   };
+}
+
+/** 空行を指定した数だけ追加 */
+function appendBlanks_(body, count) {
+  const n = (typeof count === 'number' && count >= 0) ? count : 1;
+  for (var i = 0; i < n; i++) appendBlank_(body);
 }
 
 /** 空行を1つ追加 */

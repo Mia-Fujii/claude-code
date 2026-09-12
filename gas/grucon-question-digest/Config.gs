@@ -95,6 +95,10 @@ const CONFIG = {
     BODY_FONT_SIZE: 11,
     /** 2件目以降の質問の前に入れる見出し */
     ADDENDUM_LABEL: '追記：',
+    /** 人と人のあいだに入れる空行の数（次のお名前の手前） */
+    BLANK_LINES_BETWEEN_PEOPLE: 2,
+    /** 同じ人の「追記：」の手前に入れる空行の数 */
+    BLANK_LINES_BEFORE_ADDENDUM: 1,
     /** 自動処理メモをドキュメント末尾にも入れるか（既定は入れない＝Chatworkのみ） */
     INCLUDE_NOTES: false,
   },
