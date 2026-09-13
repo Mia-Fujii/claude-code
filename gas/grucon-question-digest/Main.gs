@@ -43,7 +43,11 @@ function removeAllTriggers() {
 /** 現在の設定状況をログに出す（設定確認用） */
 function showStatus() {
   const lines = [];
+  const profile = getProfile_();
   lines.push('── 設定状況 ──────────────────────────');
+  lines.push('対象イベント          : ' + profile.label);
+  lines.push('　日程シートの内容列  : 「' + profile.eventName + '」と完全一致する行');
+  lines.push('　保存フォルダ名      : ' + profile.folderName);
   try {
     lines.push('期（基本設定B2）      : ' + getTermName_());
   } catch (e) {
@@ -90,9 +94,9 @@ function showStatus() {
 
   try {
     const events = listTargetEvents_();
-    lines.push('グルコン件数          : ' + events.length + '件');
+    lines.push(profile.label + '件数' + '          : ' + events.length + '件');
     const next = findNextEvent_();
-    lines.push('次回グルコン          : ' + (next
+    lines.push('次回' + profile.label + '          : ' + (next
       ? formatDateJa_(next.date) + ' ' + next.startTime + '〜' + next.endTime
       : '（今日以降の予定なし）'));
     if (next) {
@@ -102,7 +106,7 @@ function showStatus() {
       lines.push('　ドキュメント名      : ' + buildDocTitle_(next.date));
     }
   } catch (e) {
-    lines.push('グルコン一覧          : ⚠ ' + e.message);
+    lines.push(profile.label + '一覧          : ⚠ ' + e.message);
   }
 
   const triggers = ScriptApp.getProjectTriggers().map(function (t) {

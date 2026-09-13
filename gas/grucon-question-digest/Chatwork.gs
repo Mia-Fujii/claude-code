@@ -54,6 +54,7 @@ function buildNotificationMessage_(event, result, docInfo) {
     lines.push('');
   }
   lines.push(docInfo.title + 'の質問まとめを作成しました。');
+  if (event && event.owner) lines.push('担当：' + event.owner);
   lines.push('ご確認お願いいたします！');
   lines.push(docInfo.url);
 

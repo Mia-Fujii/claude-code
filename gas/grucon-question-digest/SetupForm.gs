@@ -6,8 +6,7 @@
  * その場合は setFormIds() でIDを登録してください。
  */
 
-const FORM_TITLE = 'グルコン事前質問フォーム';
-const QUESTION_ITEM_TITLE = 'ヴォンドラ高橋若菜へのご質問&ご相談';
+// フォーム名と質問文はプロファイル（PROFILES）から取ります。
 
 /**
  * ★フォームと回答スプレッドシートを作り、スクリプトプロパティに登録します。
@@ -15,9 +14,10 @@ const QUESTION_ITEM_TITLE = 'ヴォンドラ高橋若菜へのご質問&ご相�
  * 「グルコン事前フォームURL」に貼り替えてください。
  */
 function setupCreateForm() {
-  const form = FormApp.create(FORM_TITLE);
+  const profile = getProfile_();
+  const form = FormApp.create(profile.formTitle);
   form.setDescription(
-    'グルコン当日にヴォンドラ高橋若菜先生へ相談したいこと・質問したいことをご記入ください。\n'
+    profile.label + '当日に相談したいこと・質問したいことをご記入ください。\n'
     + '※添削をご希望の場合は、対象物のURLを必ず貼り付け、'
     + '「リンクを知っている全員が閲覧可」に設定してください。'
   );
@@ -46,7 +46,7 @@ function setupCreateForm() {
     .setRequired(true);
 
   form.addParagraphTextItem()
-    .setTitle(QUESTION_ITEM_TITLE)
+    .setTitle(profile.questionItemTitle)
     .setHelpText('困っていること、相談したいことを具体的にご記入ください。')
     .setRequired(true);
 
@@ -59,7 +59,7 @@ function setupCreateForm() {
   form.setAcceptingResponses(false);      // 最初は閉じた状態。5日前に自動で開きます。
 
   // ── 回答スプレッドシートを作成して紐付け ──
-  const ss = SpreadsheetApp.create(FORM_TITLE + '（回答）');
+  const ss = SpreadsheetApp.create(profile.formTitle + '（回答）');
   form.setDestination(FormApp.DestinationType.SPREADSHEET, ss.getId());
 
   // ── フォルダへ移動（講座ルート直下） ──

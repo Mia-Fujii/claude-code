@@ -4,14 +4,13 @@
 
 /** 回答スプレッドシートのシートを取得 */
 function getResponseSheet_() {
-  const id = cfg_('RESPONSE_SPREADSHEET_ID');
-  var ss;
-  if (id) {
+  // ① 貼り付けられているスプレッドシートをそのまま使う
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  // ② スタンドアロン実行時は、設定またはプロファイルのIDを使う
+  if (!ss) {
+    const id = cfg_('RESPONSE_SPREADSHEET_ID') || getProfile_().responseSpreadsheetId;
+    if (!id) throw new Error('回答スプレッドシートが特定できません。RESPONSE_SPREADSHEET_ID を設定してください。');
     ss = SpreadsheetApp.openById(id);
-  } else {
-    // 回答スプレッドシートに貼り付けている場合は、そのシートを使う
-    ss = SpreadsheetApp.getActiveSpreadsheet();
-    if (!ss) throw new Error('RESPONSE_SPREADSHEET_ID が未設定です。setupCreateForm() を実行するか、手動で設定してください。');
   }
   if (CONFIG.RESPONSE_SHEET_NAME) {
     const sheet = ss.getSheetByName(CONFIG.RESPONSE_SHEET_NAME);

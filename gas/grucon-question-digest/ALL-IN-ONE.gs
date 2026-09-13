@@ -1,17 +1,22 @@
 /**
  * ═══════════════════════════════════════════════════════════════
- *  グルコン事前質問まとめ 自動化（全部入り 1ファイル版）
+ *  事前質問まとめ 自動化（全部入り 1ファイル版）
+ *  グルコン ／ ビギナーグルコン 共用
  * ═══════════════════════════════════════════════════════════════
  *
  *  Googleフォームの「回答」スプレッドシートを開き、
  *  拡張機能 → Apps Script → コード.gs にこれを丸ごと貼り付けてください。
  *
- *  ── まず試すこと ────────────────────────────────────────
- *    1. 貼り付けて保存（Ctrl+S / ⌘S）
+ *  グルコン用・ビギナーグルコン用で【まったく同じコード】を使えます。
+ *  貼り付けた回答スプレッドシートのIDから、どちらの設定を使うかを
+ *  自動で判別します（PROFILES を参照）。
+ *
+ *  ── 貼ったあとにやること ──────────────────────────────
+ *    1. 保存（Ctrl+S / ⌘S）
  *    2. スプレッドシートに戻って再読み込み
- *       → 上部に「グルコン質問まとめ」メニューが出ます
- *    3. メニュー →「① 設定状況を確認」
- *    4. メニュー →「② テスト：この回答シート全部でドキュメント作成」
+ *       →「グルコン質問まとめ」または「ビギナーグルコン質問まとめ」メニューが出ます
+ *    3. メニュー →「① 設定状況を確認」で【対象イベント】が正しいか確認
+ *    4. メニュー →「自動実行トリガーを設置」
  *
  *  詳しい手順は README.md を参照してください。
  * ═══════════════════════════════════════════════════════════════
@@ -39,6 +44,83 @@
  *   MASTER_SPREADSHEET_ID   ... （任意）期が変わったらここを貼り替えるだけ
  */
 
+/**
+ * ── 対象イベントの設定（プロファイル）──────────────────────
+ *
+ * このスクリプトは「グルコン」と「ビギナーグルコン」の両方で使えます。
+ * 貼り付けた回答スプレッドシートのIDから、どちらの設定を使うかを
+ * 自動で判別するので、コードを書き換える必要はありません。
+ */
+const PROFILES = {
+
+  'グルコン': {
+    label: 'グルコン',
+    /** 日程シートの「内容」列とこの文字列が完全一致する行を対象にします */
+    eventName: 'グルコン',
+    /** 期フォルダの下に作るフォルダ名 */
+    folderName: 'グルコン',
+    /** ドキュメント名の末尾（例：9/14グルコン） */
+    titleSuffix: 'グルコン',
+    /** フォームの回答スプレッドシートのID */
+    responseSpreadsheetId: '1GsKR1ZzsFo56CRDYtdCnYpDCvqahdH3TcKoMfG-3nHE',
+    /** フォーム作成用（setupCreateForm を使う場合のみ） */
+    formTitle: 'グルコン事前質問フォーム',
+    questionItemTitle: 'ヴォンドラ高橋若菜へのご質問&ご相談',
+  },
+
+  'ビギナーグルコン': {
+    label: 'ビギナーグルコン',
+    eventName: 'サポート講師ビギナーグルコン',
+    folderName: 'ビギナーグルコン',
+    titleSuffix: 'ビギナーグルコン',
+    responseSpreadsheetId: '1kkXhUm5t2Pkk4iqwOUlm478FWGFkPANxoarHfjTANiw',
+    formTitle: 'ビギナーグルコン事前質問フォーム',
+    questionItemTitle: 'サポート講師へのご質問&ご相談',
+  },
+
+};
+
+/** 自動判別できなかったときに使うプロファイル */
+const DEFAULT_PROFILE = 'グルコン';
+
+var PROFILE_CACHE_ = null;
+
+/**
+ * このスクリプトがどちらのイベント用かを判定する。
+ * ① スクリプトプロパティ PROFILE が設定されていればそれを使う
+ * ② 貼り付けられている回答スプレッドシートのIDから自動判別
+ * ③ どちらでもなければ DEFAULT_PROFILE
+ */
+function getProfile_() {
+  if (PROFILE_CACHE_) return PROFILE_CACHE_;
+
+  const forced = PropertiesService.getScriptProperties().getProperty('PROFILE');
+  if (forced && PROFILES[forced]) {
+    PROFILE_CACHE_ = PROFILES[forced];
+    return PROFILE_CACHE_;
+  }
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (ss) {
+      const id = ss.getId();
+      for (var key in PROFILES) {
+        if (PROFILES[key].responseSpreadsheetId === id) {
+          PROFILE_CACHE_ = PROFILES[key];
+          return PROFILE_CACHE_;
+        }
+      }
+      console.warn('このスプレッドシート（' + id + '）はPROFILESに登録されていません。'
+        + '「' + DEFAULT_PROFILE + '」の設定で動きます。');
+    }
+  } catch (e) {
+    // スプレッドシートに紐づいていない場合はここに来る
+  }
+
+  PROFILE_CACHE_ = PROFILES[DEFAULT_PROFILE];
+  return PROFILE_CACHE_;
+}
+
 const CONFIG = {
 
   // ── ファイル・フォルダID ────────────────────────────────
@@ -52,11 +134,10 @@ const CONFIG = {
   FORM_ID: '',
 
   /**
-   * ★フォームの回答スプレッドシートのID。
-   * このスクリプトを回答スプレッドシートに貼り付けている場合は
-   * 空のままでも「今開いているシート」が自動で使われます。
+   * フォームの回答スプレッドシートのID。
+   * 通常は空のままでOKです（プロファイル、または今開いているシートを使います）。
    */
-  RESPONSE_SPREADSHEET_ID: '1GsKR1ZzsFo56CRDYtdCnYpDCvqahdH3TcKoMfG-3nHE',
+  RESPONSE_SPREADSHEET_ID: '',
 
   // ── マスタスプレッドシートのシート名 ───────────────────
   /** 日程シート（見つかった方を使います） */
@@ -73,9 +154,6 @@ const CONFIG = {
     endTime: '終了時間',
     owner: '担当者',
   },
-
-  /** 対象イベント名（完全一致。「サポート講師ビギナーグルコン」は拾いません） */
-  TARGET_EVENT_NAME: 'グルコン',
 
   // ── フォームの回答スプレッドシートの列（1始まり） ───────
   RESPONSE_SHEET_NAME: '',   // 空ならブックの最初のシート
@@ -108,9 +186,8 @@ const CONFIG = {
 
   // ── ドキュメントの書式 ─────────────────────────────────
   DOC: {
-    /** ファイル名のテンプレート（M/d がグルコン日に置換されます） */
+    /** ファイル名の日付部分（末尾のイベント名はプロファイルから付きます） */
     TITLE_FORMAT: 'M/d',
-    TITLE_SUFFIX: 'グルコン',
     FONT_FAMILY: 'Arial',
     NAME_FONT_SIZE: 14,
     NAME_BOLD: true,
@@ -340,7 +417,7 @@ function listTargetEvents_() {
   const iEnd = header.indexOf(H.endTime);
   const iOwner = header.indexOf(H.owner);
 
-  const target = CONFIG.TARGET_EVENT_NAME;
+  const target = getProfile_().eventName;
   const events = [];
 
   for (var r = 1; r < values.length; r++) {
@@ -402,14 +479,13 @@ function getCollectionWindow_(eventDate) {
 
 /** 回答スプレッドシートのシートを取得 */
 function getResponseSheet_() {
-  const id = cfg_('RESPONSE_SPREADSHEET_ID');
-  var ss;
-  if (id) {
+  // ① 貼り付けられているスプレッドシートをそのまま使う
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  // ② スタンドアロン実行時は、設定またはプロファイルのIDを使う
+  if (!ss) {
+    const id = cfg_('RESPONSE_SPREADSHEET_ID') || getProfile_().responseSpreadsheetId;
+    if (!id) throw new Error('回答スプレッドシートが特定できません。RESPONSE_SPREADSHEET_ID を設定してください。');
     ss = SpreadsheetApp.openById(id);
-  } else {
-    // 回答スプレッドシートに貼り付けている場合は、そのシートを使う
-    ss = SpreadsheetApp.getActiveSpreadsheet();
-    if (!ss) throw new Error('RESPONSE_SPREADSHEET_ID が未設定です。setupCreateForm() を実行するか、手動で設定してください。');
   }
   if (CONFIG.RESPONSE_SHEET_NAME) {
     const sheet = ss.getSheetByName(CONFIG.RESPONSE_SHEET_NAME);
@@ -607,18 +683,19 @@ function resolveTargetFolder_(createdLog) {
   if (!rootId) throw new Error('COURSE_ROOT_FOLDER_ID が設定されていません。');
   const root = DriveApp.getFolderById(rootId);
   const term = getTermName_();                       // 例: "21期"
+  const folderName = getProfile_().folderName;
   const termFolder = getOrCreateFolder_(root, term, createdLog);
-  const gruconFolder = getOrCreateFolder_(termFolder, 'グルコン', createdLog);
+  const eventFolder = getOrCreateFolder_(termFolder, folderName, createdLog);
   return {
-    folder: gruconFolder,
-    path: root.getName() + ' / ' + term + ' / グルコン',
+    folder: eventFolder,
+    path: root.getName() + ' / ' + term + ' / ' + folderName,
     term: term,
   };
 }
 
-/** ドキュメントのファイル名（例: "8/20グルコン"） */
+/** ドキュメントのファイル名（例: "8/20グルコン" / "8/21ビギナーグルコン"） */
 function buildDocTitle_(eventDate) {
-  return formatDate_(eventDate, CONFIG.DOC.TITLE_FORMAT) + CONFIG.DOC.TITLE_SUFFIX;
+  return formatDate_(eventDate, CONFIG.DOC.TITLE_FORMAT) + getProfile_().titleSuffix;
 }
 
 /** 同名のドキュメントがあればそれを使い、無ければ作る */
@@ -975,6 +1052,7 @@ function buildNotificationMessage_(event, result, docInfo) {
     lines.push('');
   }
   lines.push(docInfo.title + 'の質問まとめを作成しました。');
+  if (event && event.owner) lines.push('担当：' + event.owner);
   lines.push('ご確認お願いいたします！');
   lines.push(docInfo.url);
 
@@ -1070,7 +1148,11 @@ function removeAllTriggers() {
 /** 現在の設定状況をログに出す（設定確認用） */
 function showStatus() {
   const lines = [];
+  const profile = getProfile_();
   lines.push('── 設定状況 ──────────────────────────');
+  lines.push('対象イベント          : ' + profile.label);
+  lines.push('　日程シートの内容列  : 「' + profile.eventName + '」と完全一致する行');
+  lines.push('　保存フォルダ名      : ' + profile.folderName);
   try {
     lines.push('期（基本設定B2）      : ' + getTermName_());
   } catch (e) {
@@ -1117,9 +1199,9 @@ function showStatus() {
 
   try {
     const events = listTargetEvents_();
-    lines.push('グルコン件数          : ' + events.length + '件');
+    lines.push(profile.label + '件数' + '          : ' + events.length + '件');
     const next = findNextEvent_();
-    lines.push('次回グルコン          : ' + (next
+    lines.push('次回' + profile.label + '          : ' + (next
       ? formatDateJa_(next.date) + ' ' + next.startTime + '〜' + next.endTime
       : '（今日以降の予定なし）'));
     if (next) {
@@ -1129,7 +1211,7 @@ function showStatus() {
       lines.push('　ドキュメント名      : ' + buildDocTitle_(next.date));
     }
   } catch (e) {
-    lines.push('グルコン一覧          : ⚠ ' + e.message);
+    lines.push(profile.label + '一覧          : ⚠ ' + e.message);
   }
 
   const triggers = ScriptApp.getProjectTriggers().map(function (t) {
@@ -1364,7 +1446,7 @@ function manualCloseForm() { closeForm_(); showStatus(); }
 function onOpen() {
   try {
     SpreadsheetApp.getUi()
-      .createMenu('グルコン質問まとめ')
+      .createMenu(getProfile_().label + '質問まとめ')
       .addItem('① 設定状況を確認', 'menuShowStatus')
       .addItem('② テスト：この回答シート全部でドキュメント作成', 'menuTestAllRows')
       .addSeparator()
@@ -1483,8 +1565,7 @@ function runFromMenu_(label, fn) {
  * その場合は setFormIds() でIDを登録してください。
  */
 
-const FORM_TITLE = 'グルコン事前質問フォーム';
-const QUESTION_ITEM_TITLE = 'ヴォンドラ高橋若菜へのご質問&ご相談';
+// フォーム名と質問文はプロファイル（PROFILES）から取ります。
 
 /**
  * ★フォームと回答スプレッドシートを作り、スクリプトプロパティに登録します。
@@ -1492,9 +1573,10 @@ const QUESTION_ITEM_TITLE = 'ヴォンドラ高橋若菜へのご質問&ご相�
  * 「グルコン事前フォームURL」に貼り替えてください。
  */
 function setupCreateForm() {
-  const form = FormApp.create(FORM_TITLE);
+  const profile = getProfile_();
+  const form = FormApp.create(profile.formTitle);
   form.setDescription(
-    'グルコン当日にヴォンドラ高橋若菜先生へ相談したいこと・質問したいことをご記入ください。\n'
+    profile.label + '当日に相談したいこと・質問したいことをご記入ください。\n'
     + '※添削をご希望の場合は、対象物のURLを必ず貼り付け、'
     + '「リンクを知っている全員が閲覧可」に設定してください。'
   );
@@ -1523,7 +1605,7 @@ function setupCreateForm() {
     .setRequired(true);
 
   form.addParagraphTextItem()
-    .setTitle(QUESTION_ITEM_TITLE)
+    .setTitle(profile.questionItemTitle)
     .setHelpText('困っていること、相談したいことを具体的にご記入ください。')
     .setRequired(true);
 
@@ -1536,7 +1618,7 @@ function setupCreateForm() {
   form.setAcceptingResponses(false);      // 最初は閉じた状態。5日前に自動で開きます。
 
   // ── 回答スプレッドシートを作成して紐付け ──
-  const ss = SpreadsheetApp.create(FORM_TITLE + '（回答）');
+  const ss = SpreadsheetApp.create(profile.formTitle + '（回答）');
   form.setDestination(FormApp.DestinationType.SPREADSHEET, ss.getId());
 
   // ── フォルダへ移動（講座ルート直下） ──

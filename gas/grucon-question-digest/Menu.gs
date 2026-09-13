@@ -10,7 +10,7 @@
 function onOpen() {
   try {
     SpreadsheetApp.getUi()
-      .createMenu('グルコン質問まとめ')
+      .createMenu(getProfile_().label + '質問まとめ')
       .addItem('① 設定状況を確認', 'menuShowStatus')
       .addItem('② テスト：この回答シート全部でドキュメント作成', 'menuTestAllRows')
       .addSeparator()

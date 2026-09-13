@@ -19,18 +19,19 @@ function resolveTargetFolder_(createdLog) {
   if (!rootId) throw new Error('COURSE_ROOT_FOLDER_ID が設定されていません。');
   const root = DriveApp.getFolderById(rootId);
   const term = getTermName_();                       // 例: "21期"
+  const folderName = getProfile_().folderName;
   const termFolder = getOrCreateFolder_(root, term, createdLog);
-  const gruconFolder = getOrCreateFolder_(termFolder, 'グルコン', createdLog);
+  const eventFolder = getOrCreateFolder_(termFolder, folderName, createdLog);
   return {
-    folder: gruconFolder,
-    path: root.getName() + ' / ' + term + ' / グルコン',
+    folder: eventFolder,
+    path: root.getName() + ' / ' + term + ' / ' + folderName,
     term: term,
   };
 }
 
-/** ドキュメントのファイル名（例: "8/20グルコン"） */
+/** ドキュメントのファイル名（例: "8/20グルコン" / "8/21ビギナーグルコン"） */
 function buildDocTitle_(eventDate) {
-  return formatDate_(eventDate, CONFIG.DOC.TITLE_FORMAT) + CONFIG.DOC.TITLE_SUFFIX;
+  return formatDate_(eventDate, CONFIG.DOC.TITLE_FORMAT) + getProfile_().titleSuffix;
 }
 
 /** 同名のドキュメントがあればそれを使い、無ければ作る */

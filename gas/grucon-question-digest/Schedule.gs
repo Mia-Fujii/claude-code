@@ -74,7 +74,7 @@ function listTargetEvents_() {
   const iEnd = header.indexOf(H.endTime);
   const iOwner = header.indexOf(H.owner);
 
-  const target = CONFIG.TARGET_EVENT_NAME;
+  const target = getProfile_().eventName;
   const events = [];
 
   for (var r = 1; r < values.length; r++) {

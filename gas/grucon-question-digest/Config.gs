@@ -15,6 +15,83 @@
  *   MASTER_SPREADSHEET_ID   ... （任意）期が変わったらここを貼り替えるだけ
  */
 
+/**
+ * ── 対象イベントの設定（プロファイル）──────────────────────
+ *
+ * このスクリプトは「グルコン」と「ビギナーグルコン」の両方で使えます。
+ * 貼り付けた回答スプレッドシートのIDから、どちらの設定を使うかを
+ * 自動で判別するので、コードを書き換える必要はありません。
+ */
+const PROFILES = {
+
+  'グルコン': {
+    label: 'グルコン',
+    /** 日程シートの「内容」列とこの文字列が完全一致する行を対象にします */
+    eventName: 'グルコン',
+    /** 期フォルダの下に作るフォルダ名 */
+    folderName: 'グルコン',
+    /** ドキュメント名の末尾（例：9/14グルコン） */
+    titleSuffix: 'グルコン',
+    /** フォームの回答スプレッドシートのID */
+    responseSpreadsheetId: '1GsKR1ZzsFo56CRDYtdCnYpDCvqahdH3TcKoMfG-3nHE',
+    /** フォーム作成用（setupCreateForm を使う場合のみ） */
+    formTitle: 'グルコン事前質問フォーム',
+    questionItemTitle: 'ヴォンドラ高橋若菜へのご質問&ご相談',
+  },
+
+  'ビギナーグルコン': {
+    label: 'ビギナーグルコン',
+    eventName: 'サポート講師ビギナーグルコン',
+    folderName: 'ビギナーグルコン',
+    titleSuffix: 'ビギナーグルコン',
+    responseSpreadsheetId: '1kkXhUm5t2Pkk4iqwOUlm478FWGFkPANxoarHfjTANiw',
+    formTitle: 'ビギナーグルコン事前質問フォーム',
+    questionItemTitle: 'サポート講師へのご質問&ご相談',
+  },
+
+};
+
+/** 自動判別できなかったときに使うプロファイル */
+const DEFAULT_PROFILE = 'グルコン';
+
+var PROFILE_CACHE_ = null;
+
+/**
+ * このスクリプトがどちらのイベント用かを判定する。
+ * ① スクリプトプロパティ PROFILE が設定されていればそれを使う
+ * ② 貼り付けられている回答スプレッドシートのIDから自動判別
+ * ③ どちらでもなければ DEFAULT_PROFILE
+ */
+function getProfile_() {
+  if (PROFILE_CACHE_) return PROFILE_CACHE_;
+
+  const forced = PropertiesService.getScriptProperties().getProperty('PROFILE');
+  if (forced && PROFILES[forced]) {
+    PROFILE_CACHE_ = PROFILES[forced];
+    return PROFILE_CACHE_;
+  }
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (ss) {
+      const id = ss.getId();
+      for (var key in PROFILES) {
+        if (PROFILES[key].responseSpreadsheetId === id) {
+          PROFILE_CACHE_ = PROFILES[key];
+          return PROFILE_CACHE_;
+        }
+      }
+      console.warn('このスプレッドシート（' + id + '）はPROFILESに登録されていません。'
+        + '「' + DEFAULT_PROFILE + '」の設定で動きます。');
+    }
+  } catch (e) {
+    // スプレッドシートに紐づいていない場合はここに来る
+  }
+
+  PROFILE_CACHE_ = PROFILES[DEFAULT_PROFILE];
+  return PROFILE_CACHE_;
+}
+
 const CONFIG = {
 
   // ── ファイル・フォルダID ────────────────────────────────
@@ -28,11 +105,10 @@ const CONFIG = {
   FORM_ID: '',
 
   /**
-   * ★フォームの回答スプレッドシートのID。
-   * このスクリプトを回答スプレッドシートに貼り付けている場合は
-   * 空のままでも「今開いているシート」が自動で使われます。
+   * フォームの回答スプレッドシートのID。
+   * 通常は空のままでOKです（プロファイル、または今開いているシートを使います）。
    */
-  RESPONSE_SPREADSHEET_ID: '1GsKR1ZzsFo56CRDYtdCnYpDCvqahdH3TcKoMfG-3nHE',
+  RESPONSE_SPREADSHEET_ID: '',
 
   // ── マスタスプレッドシートのシート名 ───────────────────
   /** 日程シート（見つかった方を使います） */
@@ -49,9 +125,6 @@ const CONFIG = {
     endTime: '終了時間',
     owner: '担当者',
   },
-
-  /** 対象イベント名（完全一致。「サポート講師ビギナーグルコン」は拾いません） */
-  TARGET_EVENT_NAME: 'グルコン',
 
   // ── フォームの回答スプレッドシートの列（1始まり） ───────
   RESPONSE_SHEET_NAME: '',   // 空ならブックの最初のシート
@@ -84,9 +157,8 @@ const CONFIG = {
 
   // ── ドキュメントの書式 ─────────────────────────────────
   DOC: {
-    /** ファイル名のテンプレート（M/d がグルコン日に置換されます） */
+    /** ファイル名の日付部分（末尾のイベント名はプロファイルから付きます） */
     TITLE_FORMAT: 'M/d',
-    TITLE_SUFFIX: 'グルコン',
     FONT_FAMILY: 'Arial',
     NAME_FONT_SIZE: 14,
     NAME_BOLD: true,
