@@ -1170,7 +1170,78 @@ function setupInstallTriggers() {
 
   logInfo_('トリガーを設置しました：dailyPlanner（'
     + CONFIG.PLANNER_HOUR + '時）／ dailySafetyNet（' + CONFIG.SAFETY_NET_HOUR + '時）');
+
+  // ★今日の朝の処理を取り逃していないか、その場で追いつかせる。
+  //   （朝6時を過ぎてから設置した場合、次に走るのは翌朝になってしまうため）
+  logInfo_('本日分の処理に追いつかせます…');
+  catchUpToday();
+
   showStatus();
+}
+
+/**
+ * 「今日やるべきだったこと」をその場で実行する。
+ *
+ * ・今日がグルコンの5日前なら → フォームを開く
+ * ・今日が前日なら → 締切時刻を過ぎていればフォームを閉じ、
+ *   送信時刻を過ぎていれば質問まとめを作ってChatworkへ送る。
+ *   まだ時刻前なら、その時刻の単発トリガーを仕込む。
+ *
+ * トリガーを朝6時より後に設置したときや、
+ * 何らかの理由で自動実行が飛んだときの追いつき用です。
+ */
+function catchUpToday() {
+  const done = [];
+
+  // ① フォームのオープン（5日前）＋受付期間中の開けっ放し確認
+  const openTarget = findEventByDaysAhead_(CONFIG.OPEN_DAYS_BEFORE);
+  if (openTarget && setFormAcceptingIfAvailable_(true)) {
+    done.push('フォームを開きました（' + formatDateJa_(openTarget.date) + ' のグルコン向け）');
+  }
+  ensureFormStateForToday_();
+
+  // ② 今日が前日でなければここまで
+  const event = findEventByDaysAhead_(CONFIG.CLOSE_DAYS_BEFORE);
+  if (!event) {
+    done.push('今日は前日ではないため、締切・まとめの処理はありません。');
+    logInfo_(done.join('\n'));
+    return done.join('\n');
+  }
+
+  const now = new Date();
+  const closeAt = new Date(now.getTime());
+  closeAt.setHours(CONFIG.CLOSE_HOUR, CONFIG.CLOSE_MINUTE, 0, 0);
+  const notifyAt = new Date(now.getTime());
+  notifyAt.setHours(CONFIG.NOTIFY_HOUR, CONFIG.NOTIFY_MINUTE, 0, 0);
+
+  // ③ 締切時刻を過ぎていれば今すぐ閉じる。まだなら単発トリガーを仕込む。
+  if (now >= closeAt) {
+    if (setFormAcceptingIfAvailable_(false)) {
+      done.push('締切時刻を過ぎていたため、フォームを閉じました。');
+    }
+    updateClosedMessage_(findEventAfter_(event.date));
+  }
+
+  // ④ 送信時刻を過ぎていて未送信なら今すぐ作って送る
+  if (now >= notifyAt) {
+    if (isDone_(event.date)) {
+      done.push('質問まとめは送信済みです。');
+    } else {
+      const out = runDigest_(event, true);
+      setDoneFlag_(event.date);
+      done.push('質問まとめを作成してChatworkへ送信しました。\n' + out.docInfo.url);
+    }
+  }
+
+  // ⑤ まだ時刻前のものは、通常どおり単発トリガーで予約する
+  if (now < closeAt || now < notifyAt) {
+    scheduleExactJobsForToday_();
+    done.push('本日の残りの処理を予約しました。');
+  }
+
+  const out = done.join('\n');
+  logInfo_(out);
+  return out;
 }
 
 /** すべてのトリガーを削除する */
@@ -1494,6 +1565,7 @@ function onOpen() {
       .addSeparator()
       .addItem('Chatworkへの接続テスト', 'menuTestChatwork')
       .addItem('自動実行トリガーを設置', 'menuInstallTriggers')
+      .addItem('本日分の処理に追いつかせる', 'menuCatchUpToday')
       .addToUi();
   } catch (e) {
     console.warn('メニューを作れませんでした（スプレッドシートに紐づいていない可能性）: ' + e);
@@ -1603,6 +1675,10 @@ function menuTestChatwork() {
   });
 }
 
+function menuCatchUpToday() {
+  runFromMenu_('本日分の処理', function () { return catchUpToday(); });
+}
+
 function menuInstallTriggers() {
   runFromMenu_('トリガー設置', function () {
     setupInstallTriggers();
@@ -1610,7 +1686,8 @@ function menuInstallTriggers() {
       + '・毎日 ' + CONFIG.PLANNER_HOUR + ':00 … フォームのオープン判定\n'
       + '・前日 ' + CONFIG.CLOSE_HOUR + ':00 … フォームの締切\n'
       + '・前日 ' + CONFIG.NOTIFY_HOUR + ':' + CONFIG.NOTIFY_MINUTE + ' … ドキュメント作成＆Chatwork送信\n'
-      + '・毎日 ' + CONFIG.SAFETY_NET_HOUR + ':00 … 取りこぼしの救済';
+      + '・毎日 ' + CONFIG.SAFETY_NET_HOUR + ':00 … 取りこぼしの救済\n\n'
+      + '※本日分の処理にも、その場で追いつかせました。';
   });
 }
 

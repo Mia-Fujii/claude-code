@@ -24,6 +24,7 @@ function onOpen() {
       .addSeparator()
       .addItem('Chatworkへの接続テスト', 'menuTestChatwork')
       .addItem('自動実行トリガーを設置', 'menuInstallTriggers')
+      .addItem('本日分の処理に追いつかせる', 'menuCatchUpToday')
       .addToUi();
   } catch (e) {
     console.warn('メニューを作れませんでした（スプレッドシートに紐づいていない可能性）: ' + e);
@@ -133,6 +134,10 @@ function menuTestChatwork() {
   });
 }
 
+function menuCatchUpToday() {
+  runFromMenu_('本日分の処理', function () { return catchUpToday(); });
+}
+
 function menuInstallTriggers() {
   runFromMenu_('トリガー設置', function () {
     setupInstallTriggers();
@@ -140,7 +145,8 @@ function menuInstallTriggers() {
       + '・毎日 ' + CONFIG.PLANNER_HOUR + ':00 … フォームのオープン判定\n'
       + '・前日 ' + CONFIG.CLOSE_HOUR + ':00 … フォームの締切\n'
       + '・前日 ' + CONFIG.NOTIFY_HOUR + ':' + CONFIG.NOTIFY_MINUTE + ' … ドキュメント作成＆Chatwork送信\n'
-      + '・毎日 ' + CONFIG.SAFETY_NET_HOUR + ':00 … 取りこぼしの救済';
+      + '・毎日 ' + CONFIG.SAFETY_NET_HOUR + ':00 … 取りこぼしの救済\n\n'
+      + '※本日分の処理にも、その場で追いつかせました。';
   });
 }
 
