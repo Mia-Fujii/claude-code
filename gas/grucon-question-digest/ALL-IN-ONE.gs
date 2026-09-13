@@ -1047,12 +1047,11 @@ function buildNotificationMessage_(event, result, docInfo) {
 
   // ── 本文 ──────────────────────────────────────────────
   const lines = [];
-  if (mention) {
-    lines.push(mention);
-    lines.push('');
-  }
-  lines.push(docInfo.title + 'の質問まとめを作成しました。');
+  if (mention) lines.push(mention);
   if (event && event.owner) lines.push('担当：' + event.owner);
+  if (lines.length > 0) lines.push('');
+
+  lines.push(docInfo.title + 'の質問をまとめました。');
   lines.push('ご確認お願いいたします！');
   lines.push(docInfo.url);
 
