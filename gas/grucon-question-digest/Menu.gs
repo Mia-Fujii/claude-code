@@ -19,6 +19,8 @@ function onOpen() {
       .addSeparator()
       .addItem('フォームを開く', 'menuOpenForm')
       .addItem('フォームを閉じる', 'menuCloseForm')
+      .addItem('フォームの診断', 'menuDiagnoseForm')
+      .addItem('フォームを登録（URLを貼る）', 'menuSetFormId')
       .addSeparator()
       .addItem('Chatworkへの接続テスト', 'menuTestChatwork')
       .addItem('自動実行トリガーを設置', 'menuInstallTriggers')
@@ -76,6 +78,47 @@ function menuCloseForm() {
     const r = setFormAccepting_(false);
     return r === 'changed' ? 'フォームを締切にしました。' : 'フォームはすでに締切です。';
   });
+}
+
+/**
+ * フォームのURLを貼って登録する。
+ * 回答シートとフォームが紐づいていない場合の手動登録用。
+ */
+function menuSetFormId() {
+  const ui = SpreadsheetApp.getUi();
+  const res = ui.prompt(
+    'フォームを登録',
+    'Googleフォームの【編集用URL】を貼り付けてください。\n\n'
+    + '例：https://docs.google.com/forms/d/xxxxxxxx/edit\n\n'
+    + '※フォームを開いた状態のアドレスバーのURLです。\n'
+    + '　「/forms/d/e/」で始まる回答用URLでは登録できません。',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (res.getSelectedButton() !== ui.Button.OK) return;
+  const input = String(res.getResponseText() || '').trim();
+  if (!input) return;
+
+  runFromMenu_('フォームを登録', function () {
+    if (input.indexOf('/forms/d/e/') >= 0) {
+      throw new Error(
+        'これは【回答用URL】です。編集用URLを貼ってください。\n\n'
+        + 'フォームを編集画面で開き、アドレスバーの\n'
+        + 'https://docs.google.com/forms/d/●●●●/edit\n'
+        + 'をコピーしてください。'
+      );
+    }
+    const form = FormApp.openById(extractId_(input));
+    PropertiesService.getScriptProperties().setProperty('FORM_ID', form.getId());
+    return '登録しました。\n\n'
+      + 'フォーム名 : ' + form.getTitle() + '\n'
+      + 'フォームID : ' + form.getId() + '\n'
+      + '現在の状態 : ' + (form.isAcceptingResponses() ? '受付中' : '締切中') + '\n'
+      + '回答用URL  : ' + form.getPublishedUrl();
+  });
+}
+
+function menuDiagnoseForm() {
+  runFromMenu_('フォームの診断', function () { return diagnoseForm(); });
 }
 
 function menuTestChatwork() {

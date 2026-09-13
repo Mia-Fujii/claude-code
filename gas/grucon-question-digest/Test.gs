@@ -276,7 +276,129 @@ function testBuildFromAllRows(spreadsheetUrlOrId) {
 /** スプレッドシート/フォームのURLからIDを取り出す（IDをそのまま渡してもOK） */
 function extractId_(urlOrId) {
   const s = String(urlOrId || '').trim();
-  if (!s) throw new Error('スプレッドシートのURLまたはIDを渡してください。');
+  if (!s) throw new Error('URLまたはIDを渡してください。');
   const m = s.match(/\/d\/([a-zA-Z0-9_-]{20,})/);
-  return m ? m[1] : s;
+  if (m) return m[1];
+  if (/^[a-zA-Z0-9_-]{20,}$/.test(s)) return s;
+  throw new Error('URLからIDを取り出せませんでした：' + s);
+}
+
+/**
+ * ★「フォームを開く」が失敗するときの原因診断
+ *
+ * どこで止まっているかを1段ずつ確認してログに出します。
+ * メニュー →「フォームの診断」から実行できます。
+ */
+function diagnoseForm() {
+  const lines = [];
+  lines.push('── フォーム診断 ────────────────────────');
+
+  // ① このスクリプトを動かしているアカウント
+  var runningAs = '(取得できません)';
+  try { runningAs = Session.getEffectiveUser().getEmail() || '(空)'; } catch (e) { runningAs = '⚠ ' + e; }
+  lines.push('① 実行アカウント   : ' + runningAs);
+  lines.push('   ※フォームの編集権限がこのアカウントに無いと開閉できません');
+
+  // ② 回答スプレッドシート
+  var ss = null;
+  try {
+    ss = SpreadsheetApp.getActiveSpreadsheet();
+    lines.push('② 回答シート       : ' + (ss ? ss.getName() + '（' + ss.getId() + '）' : '⚠ 取得できません'));
+  } catch (e) {
+    lines.push('② 回答シート       : ⚠ ' + e);
+  }
+
+  // ③ プロファイル判別
+  try {
+    const p = getProfile_();
+    lines.push('③ 対象イベント     : ' + p.label);
+    if (ss && p.responseSpreadsheetId !== ss.getId()) {
+      lines.push('   ⚠ このシートのIDがPROFILESの登録と違います。');
+      lines.push('     PROFILES の responseSpreadsheetId を ' + ss.getId() + ' に直してください。');
+    }
+  } catch (e) {
+    lines.push('③ 対象イベント     : ⚠ ' + e);
+  }
+
+  // ④ フォームが紐づいているか
+  var formUrl = null;
+  try {
+    formUrl = ss ? ss.getFormUrl() : null;
+    if (formUrl) {
+      lines.push('④ 紐づくフォーム   : あり');
+      lines.push('   編集用URL       : ' + formUrl);
+    } else {
+      lines.push('④ 紐づくフォーム   : ⚠ なし');
+      lines.push('   → このスプレッドシートはフォームの回答先になっていません。');
+      lines.push('     Googleフォームの「回答」タブ →「スプレッドシートにリンク」で');
+      lines.push('     このシートに紐づけてください。');
+    }
+  } catch (e) {
+    lines.push('④ 紐づくフォーム   : ⚠ ' + e);
+  }
+
+  // ⑤ 設定済みのFORM_ID
+  const savedId = PropertiesService.getScriptProperties().getProperty('FORM_ID');
+  lines.push('⑤ 保存済みFORM_ID  : ' + (savedId || '(なし)'));
+  try {
+    lines.push('   プロファイルのID : ' + (getProfile_().formId || '(なし)'));
+  } catch (e) { /* noop */ }
+
+  // ⑤-2 実際に使われるフォーム
+  try {
+    const resolved = getFormOrNull_();
+    lines.push('   実際に使うフォーム: ' + (resolved ? resolved.getTitle() : '⚠ 見つかりません'));
+  } catch (e) {
+    lines.push('   実際に使うフォーム: ⚠ ' + e);
+  }
+
+  // ⑥ フォームを開けるか
+  var form = null;
+  var openError = '';
+  try {
+    form = getFormOrNull_();
+  } catch (e) {
+    openError = (e && e.message) ? e.message : String(e);
+  }
+  if (!form && formUrl && !openError) {
+    try {
+      form = FormApp.openByUrl(formUrl);
+    } catch (e) {
+      openError = (e && e.message) ? e.message : String(e);
+    }
+  }
+  if (form) {
+    lines.push('⑥ フォームを開く   : ✅ 成功 —「' + form.getTitle() + '」');
+  } else {
+    lines.push('⑥ フォームを開く   : ⚠ 失敗' + (openError ? ' — ' + openError : ''));
+    if (/permission|権限|アクセス|not have access/i.test(openError)) {
+      lines.push('   → 実行アカウント（' + runningAs + '）にフォームの編集権限がありません。');
+      lines.push('     フォームの所有者に、このアドレスを「編集者」として追加してもらってください。');
+    } else if (!formUrl) {
+      lines.push('   → フォームIDが未登録で、シートにも紐づいていません。');
+      lines.push('     メニュー →「フォームを登録（URLを貼る）」から登録してください。');
+    }
+  }
+
+  // ⑦ 受付状態の読み取り／書き込み可否
+  if (form) {
+    try {
+      lines.push('⑦ 受付状態         : ' + (form.isAcceptingResponses() ? '受付中' : '締切中'));
+    } catch (e) {
+      lines.push('⑦ 受付状態         : ⚠ ' + e);
+    }
+    try {
+      // 現在の状態を同じ値で書き直して、書き込み権限があるか確認する
+      form.setAcceptingResponses(form.isAcceptingResponses());
+      lines.push('⑧ 開閉の書き込み   : ✅ 可能');
+    } catch (e) {
+      lines.push('⑧ 開閉の書き込み   : ⚠ 不可 — ' + ((e && e.message) ? e.message : e));
+      lines.push('   → 閲覧権限しかない可能性があります。編集者権限が必要です。');
+    }
+  }
+
+  lines.push('────────────────────────────────────');
+  const out = lines.join('\n');
+  console.log(out);
+  return out;
 }

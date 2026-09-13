@@ -63,6 +63,11 @@ const PROFILES = {
     titleSuffix: 'グルコン',
     /** フォームの回答スプレッドシートのID */
     responseSpreadsheetId: '1GsKR1ZzsFo56CRDYtdCnYpDCvqahdH3TcKoMfG-3nHE',
+    /**
+     * GoogleフォームのID（編集用URL .../forms/d/【ここ】/edit の部分）。
+     * 空にすると、回答スプレッドシートに紐づくフォームを自動検出します。
+     */
+    formId: '',
     /** フォーム作成用（setupCreateForm を使う場合のみ） */
     formTitle: 'グルコン事前質問フォーム',
     questionItemTitle: 'ヴォンドラ高橋若菜へのご質問&ご相談',
@@ -74,6 +79,7 @@ const PROFILES = {
     folderName: 'ビギナーグルコン',
     titleSuffix: 'ビギナーグルコン',
     responseSpreadsheetId: '1kkXhUm5t2Pkk4iqwOUlm478FWGFkPANxoarHfjTANiw',
+    formId: '10jX_9SUmPuuOwW81G64qzhUN1-ShL3ykYiTOdc47qDQ',
     formTitle: 'ビギナーグルコン事前質問フォーム',
     questionItemTitle: 'サポート講師へのご質問&ご相談',
   },
@@ -875,7 +881,7 @@ function cleanupLeadingEmpty_(body) {
  * 対象のフォームを取得する。見つからなければ null を返す。
  */
 function getFormOrNull_() {
-  // ① 設定済みのIDがあればそれを使う
+  // ① スクリプトプロパティ／CONFIG のIDがあればそれを使う
   const id = cfg_('FORM_ID');
   if (id) {
     try {
@@ -885,7 +891,17 @@ function getFormOrNull_() {
     }
   }
 
-  // ② 回答スプレッドシートに紐づいているフォームを自動検出する
+  // ② プロファイルに登録されたIDを使う
+  try {
+    const profileFormId = getProfile_().formId;
+    if (profileFormId) {
+      return FormApp.openById(profileFormId);
+    }
+  } catch (e) {
+    console.warn('プロファイルのフォームIDで開けませんでした: ' + e);
+  }
+
+  // ③ 回答スプレッドシートに紐づいているフォームを自動検出する
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     if (!ss) {
@@ -1454,6 +1470,8 @@ function onOpen() {
       .addSeparator()
       .addItem('フォームを開く', 'menuOpenForm')
       .addItem('フォームを閉じる', 'menuCloseForm')
+      .addItem('フォームの診断', 'menuDiagnoseForm')
+      .addItem('フォームを登録（URLを貼る）', 'menuSetFormId')
       .addSeparator()
       .addItem('Chatworkへの接続テスト', 'menuTestChatwork')
       .addItem('自動実行トリガーを設置', 'menuInstallTriggers')
@@ -1511,6 +1529,47 @@ function menuCloseForm() {
     const r = setFormAccepting_(false);
     return r === 'changed' ? 'フォームを締切にしました。' : 'フォームはすでに締切です。';
   });
+}
+
+/**
+ * フォームのURLを貼って登録する。
+ * 回答シートとフォームが紐づいていない場合の手動登録用。
+ */
+function menuSetFormId() {
+  const ui = SpreadsheetApp.getUi();
+  const res = ui.prompt(
+    'フォームを登録',
+    'Googleフォームの【編集用URL】を貼り付けてください。\n\n'
+    + '例：https://docs.google.com/forms/d/xxxxxxxx/edit\n\n'
+    + '※フォームを開いた状態のアドレスバーのURLです。\n'
+    + '　「/forms/d/e/」で始まる回答用URLでは登録できません。',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (res.getSelectedButton() !== ui.Button.OK) return;
+  const input = String(res.getResponseText() || '').trim();
+  if (!input) return;
+
+  runFromMenu_('フォームを登録', function () {
+    if (input.indexOf('/forms/d/e/') >= 0) {
+      throw new Error(
+        'これは【回答用URL】です。編集用URLを貼ってください。\n\n'
+        + 'フォームを編集画面で開き、アドレスバーの\n'
+        + 'https://docs.google.com/forms/d/●●●●/edit\n'
+        + 'をコピーしてください。'
+      );
+    }
+    const form = FormApp.openById(extractId_(input));
+    PropertiesService.getScriptProperties().setProperty('FORM_ID', form.getId());
+    return '登録しました。\n\n'
+      + 'フォーム名 : ' + form.getTitle() + '\n'
+      + 'フォームID : ' + form.getId() + '\n'
+      + '現在の状態 : ' + (form.isAcceptingResponses() ? '受付中' : '締切中') + '\n'
+      + '回答用URL  : ' + form.getPublishedUrl();
+  });
+}
+
+function menuDiagnoseForm() {
+  runFromMenu_('フォームの診断', function () { return diagnoseForm(); });
 }
 
 function menuTestChatwork() {
@@ -1981,7 +2040,129 @@ function testBuildFromAllRows(spreadsheetUrlOrId) {
 /** スプレッドシート/フォームのURLからIDを取り出す（IDをそのまま渡してもOK） */
 function extractId_(urlOrId) {
   const s = String(urlOrId || '').trim();
-  if (!s) throw new Error('スプレッドシートのURLまたはIDを渡してください。');
+  if (!s) throw new Error('URLまたはIDを渡してください。');
   const m = s.match(/\/d\/([a-zA-Z0-9_-]{20,})/);
-  return m ? m[1] : s;
+  if (m) return m[1];
+  if (/^[a-zA-Z0-9_-]{20,}$/.test(s)) return s;
+  throw new Error('URLからIDを取り出せませんでした：' + s);
+}
+
+/**
+ * ★「フォームを開く」が失敗するときの原因診断
+ *
+ * どこで止まっているかを1段ずつ確認してログに出します。
+ * メニュー →「フォームの診断」から実行できます。
+ */
+function diagnoseForm() {
+  const lines = [];
+  lines.push('── フォーム診断 ────────────────────────');
+
+  // ① このスクリプトを動かしているアカウント
+  var runningAs = '(取得できません)';
+  try { runningAs = Session.getEffectiveUser().getEmail() || '(空)'; } catch (e) { runningAs = '⚠ ' + e; }
+  lines.push('① 実行アカウント   : ' + runningAs);
+  lines.push('   ※フォームの編集権限がこのアカウントに無いと開閉できません');
+
+  // ② 回答スプレッドシート
+  var ss = null;
+  try {
+    ss = SpreadsheetApp.getActiveSpreadsheet();
+    lines.push('② 回答シート       : ' + (ss ? ss.getName() + '（' + ss.getId() + '）' : '⚠ 取得できません'));
+  } catch (e) {
+    lines.push('② 回答シート       : ⚠ ' + e);
+  }
+
+  // ③ プロファイル判別
+  try {
+    const p = getProfile_();
+    lines.push('③ 対象イベント     : ' + p.label);
+    if (ss && p.responseSpreadsheetId !== ss.getId()) {
+      lines.push('   ⚠ このシートのIDがPROFILESの登録と違います。');
+      lines.push('     PROFILES の responseSpreadsheetId を ' + ss.getId() + ' に直してください。');
+    }
+  } catch (e) {
+    lines.push('③ 対象イベント     : ⚠ ' + e);
+  }
+
+  // ④ フォームが紐づいているか
+  var formUrl = null;
+  try {
+    formUrl = ss ? ss.getFormUrl() : null;
+    if (formUrl) {
+      lines.push('④ 紐づくフォーム   : あり');
+      lines.push('   編集用URL       : ' + formUrl);
+    } else {
+      lines.push('④ 紐づくフォーム   : ⚠ なし');
+      lines.push('   → このスプレッドシートはフォームの回答先になっていません。');
+      lines.push('     Googleフォームの「回答」タブ →「スプレッドシートにリンク」で');
+      lines.push('     このシートに紐づけてください。');
+    }
+  } catch (e) {
+    lines.push('④ 紐づくフォーム   : ⚠ ' + e);
+  }
+
+  // ⑤ 設定済みのFORM_ID
+  const savedId = PropertiesService.getScriptProperties().getProperty('FORM_ID');
+  lines.push('⑤ 保存済みFORM_ID  : ' + (savedId || '(なし)'));
+  try {
+    lines.push('   プロファイルのID : ' + (getProfile_().formId || '(なし)'));
+  } catch (e) { /* noop */ }
+
+  // ⑤-2 実際に使われるフォーム
+  try {
+    const resolved = getFormOrNull_();
+    lines.push('   実際に使うフォーム: ' + (resolved ? resolved.getTitle() : '⚠ 見つかりません'));
+  } catch (e) {
+    lines.push('   実際に使うフォーム: ⚠ ' + e);
+  }
+
+  // ⑥ フォームを開けるか
+  var form = null;
+  var openError = '';
+  try {
+    form = getFormOrNull_();
+  } catch (e) {
+    openError = (e && e.message) ? e.message : String(e);
+  }
+  if (!form && formUrl && !openError) {
+    try {
+      form = FormApp.openByUrl(formUrl);
+    } catch (e) {
+      openError = (e && e.message) ? e.message : String(e);
+    }
+  }
+  if (form) {
+    lines.push('⑥ フォームを開く   : ✅ 成功 —「' + form.getTitle() + '」');
+  } else {
+    lines.push('⑥ フォームを開く   : ⚠ 失敗' + (openError ? ' — ' + openError : ''));
+    if (/permission|権限|アクセス|not have access/i.test(openError)) {
+      lines.push('   → 実行アカウント（' + runningAs + '）にフォームの編集権限がありません。');
+      lines.push('     フォームの所有者に、このアドレスを「編集者」として追加してもらってください。');
+    } else if (!formUrl) {
+      lines.push('   → フォームIDが未登録で、シートにも紐づいていません。');
+      lines.push('     メニュー →「フォームを登録（URLを貼る）」から登録してください。');
+    }
+  }
+
+  // ⑦ 受付状態の読み取り／書き込み可否
+  if (form) {
+    try {
+      lines.push('⑦ 受付状態         : ' + (form.isAcceptingResponses() ? '受付中' : '締切中'));
+    } catch (e) {
+      lines.push('⑦ 受付状態         : ⚠ ' + e);
+    }
+    try {
+      // 現在の状態を同じ値で書き直して、書き込み権限があるか確認する
+      form.setAcceptingResponses(form.isAcceptingResponses());
+      lines.push('⑧ 開閉の書き込み   : ✅ 可能');
+    } catch (e) {
+      lines.push('⑧ 開閉の書き込み   : ⚠ 不可 — ' + ((e && e.message) ? e.message : e));
+      lines.push('   → 閲覧権限しかない可能性があります。編集者権限が必要です。');
+    }
+  }
+
+  lines.push('────────────────────────────────────');
+  const out = lines.join('\n');
+  console.log(out);
+  return out;
 }

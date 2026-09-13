@@ -34,6 +34,11 @@ const PROFILES = {
     titleSuffix: 'グルコン',
     /** フォームの回答スプレッドシートのID */
     responseSpreadsheetId: '1GsKR1ZzsFo56CRDYtdCnYpDCvqahdH3TcKoMfG-3nHE',
+    /**
+     * GoogleフォームのID（編集用URL .../forms/d/【ここ】/edit の部分）。
+     * 空にすると、回答スプレッドシートに紐づくフォームを自動検出します。
+     */
+    formId: '',
     /** フォーム作成用（setupCreateForm を使う場合のみ） */
     formTitle: 'グルコン事前質問フォーム',
     questionItemTitle: 'ヴォンドラ高橋若菜へのご質問&ご相談',
@@ -45,6 +50,7 @@ const PROFILES = {
     folderName: 'ビギナーグルコン',
     titleSuffix: 'ビギナーグルコン',
     responseSpreadsheetId: '1kkXhUm5t2Pkk4iqwOUlm478FWGFkPANxoarHfjTANiw',
+    formId: '10jX_9SUmPuuOwW81G64qzhUN1-ShL3ykYiTOdc47qDQ',
     formTitle: 'ビギナーグルコン事前質問フォーム',
     questionItemTitle: 'サポート講師へのご質問&ご相談',
   },
