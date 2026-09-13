@@ -55,6 +55,22 @@ const PROFILES = {
     questionItemTitle: 'サポート講師へのご質問&ご相談',
   },
 
+  '課題作業会': {
+    label: '課題作業会',
+    eventName: '課題作業会',
+    /**
+     * ★保存先フォルダはビギナーグルコンと同じにしています。
+     *   課題作業会だけ別フォルダにしたい場合は '課題作業会' に変更してください
+     *   （そのフォルダが無ければ自動で作られます）。
+     */
+    folderName: 'ビギナーグルコン',
+    titleSuffix: '課題作業会',
+    responseSpreadsheetId: '1DpOFvFqiJ7cISCEqr8RAJeiSPbNW8Mc_O_xqgd0SU4Y',
+    formId: '',
+    formTitle: '課題作業会事前質問フォーム',
+    questionItemTitle: '「作業会でこんな作業を一緒にしてほしい！〇〇に困っている！」という内容やご質問',
+  },
+
 };
 
 /** 自動判別できなかったときに使うプロファイル */
