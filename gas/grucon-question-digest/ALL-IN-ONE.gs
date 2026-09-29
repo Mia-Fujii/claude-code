@@ -360,6 +360,64 @@ function getMasterSpreadsheetId_()   { return idFor_('MASTER_SPREADSHEET_ID', 'm
 function getResponseSpreadsheetId_() { return idFor_('RESPONSE_SPREADSHEET_ID', 'responseSpreadsheetId'); }
 function getFormIdSetting_()         { return idFor_('FORM_ID', 'formId'); }
 
+// ─────────────────────────────────────────────────────────
+//  機能スイッチ（貼り付け先で自動的に決まります）
+// ─────────────────────────────────────────────────────────
+/*
+ * 同じコードを2か所に貼って両方でトリガーを設置すると、
+ * 同じ処理が二重に走ってしまいます。そこで、
+ * 「どのスプレッドシートに貼られているか」で担当を分けます。
+ *
+ *   回答スプレッドシート → 質問まとめ＋フォーム開閉
+ *   日程スプレッドシート → メール下書き
+ *
+ * どちらも動かしたい場合は、スクリプトプロパティ
+ *   FEATURES = both     （両方）
+ *   FEATURES = digest   （質問まとめのみ）
+ *   FEATURES = mail     （メール下書きのみ）
+ * で上書きできます。
+ */
+
+var FEATURES_CACHE_ = null;
+
+function getFeatures_() {
+  if (FEATURES_CACHE_) return FEATURES_CACHE_;
+
+  const forced = String(
+    PropertiesService.getScriptProperties().getProperty('FEATURES') || ''
+  ).trim().toLowerCase();
+  if (forced === 'both')   { FEATURES_CACHE_ = { digest: true,  mail: true,  reason: '設定（FEATURES=both）' }; return FEATURES_CACHE_; }
+  if (forced === 'digest') { FEATURES_CACHE_ = { digest: true,  mail: false, reason: '設定（FEATURES=digest）' }; return FEATURES_CACHE_; }
+  if (forced === 'mail')   { FEATURES_CACHE_ = { digest: false, mail: true,  reason: '設定（FEATURES=mail）' }; return FEATURES_CACHE_; }
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (ss) {
+      const id = ss.getId();
+      if (id === getResponseSpreadsheetId_()) {
+        FEATURES_CACHE_ = { digest: true, mail: false, reason: '回答シートに貼られているため' };
+        return FEATURES_CACHE_;
+      }
+      if (id === getMasterSpreadsheetId_()) {
+        FEATURES_CACHE_ = { digest: false, mail: true, reason: '日程シートに貼られているため' };
+        return FEATURES_CACHE_;
+      }
+    }
+  } catch (e) { /* noop */ }
+
+  FEATURES_CACHE_ = { digest: true, mail: true, reason: '判別できないため両方' };
+  return FEATURES_CACHE_;
+}
+
+/** 機能の説明（設定状況の表示用） */
+function describeFeatures_() {
+  const f = getFeatures_();
+  const on = [];
+  if (f.digest) on.push('質問まとめ＋フォーム開閉');
+  if (f.mail) on.push('メール下書き');
+  return on.join(' ＋ ') + '（' + f.reason + '）';
+}
+
 
 // ══════════════════════════════════════════════════════════════
 // Util.gs
@@ -2204,24 +2262,34 @@ function setupInstallTriggers() {
  */
 function catchUpToday() {
   const done = [];
+  const features = getFeatures_();
 
-  // ① フォームのオープン（5日前）＋受付期間中の開けっ放し確認
+  // ① メール下書き
+  if (features.mail) {
+    try {
+      const drafts = createDraftsIfDue_();
+      drafts.forEach(function (d) { done.push(d); });
+      if (drafts.length > 0) notifyDrafts_(drafts);
+      if (drafts.length === 0) done.push('今日は下書きを作る日ではありません。');
+    } catch (e) {
+      done.push('⚠ メール下書きの作成でエラー：' + ((e && e.message) ? e.message : e));
+    }
+  }
+
+  if (!features.digest) {
+    const outMailOnly = done.join('\n');
+    logInfo_(outMailOnly);
+    return outMailOnly;
+  }
+
+  // ② フォームのオープン（5日前）＋受付期間中の開けっ放し確認
   const openTarget = findEventByDaysAhead_(CONFIG.OPEN_DAYS_BEFORE);
   if (openTarget && setFormAcceptingIfAvailable_(true)) {
-    done.push('フォームを開きました（' + formatDateJa_(openTarget.date) + ' のグルコン向け）');
+    done.push('フォームを開きました（' + formatDateJa_(openTarget.date) + ' に向けて）');
   }
   ensureFormStateForToday_();
 
-  // ①-2 メール下書き
-  try {
-    const drafts = createDraftsIfDue_();
-    drafts.forEach(function (d) { done.push(d); });
-    if (drafts.length > 0) notifyDrafts_(drafts);
-  } catch (e) {
-    done.push('⚠ メール下書きの作成でエラー：' + ((e && e.message) ? e.message : e));
-  }
-
-  // ② 今日が前日でなければここまで
+  // ③ 今日が前日でなければここまで
   const event = findEventByDaysAhead_(CONFIG.CLOSE_DAYS_BEFORE);
   if (!event) {
     done.push('今日は前日ではないため、締切・まとめの処理はありません。');
@@ -2277,6 +2345,7 @@ function showStatus() {
   const profile = getProfile_();
   lines.push('── 設定状況 ──────────────────────────');
   lines.push('対象イベント          : ' + profile.label);
+  lines.push('この スクリプトの担当  : ' + describeFeatures_());
   lines.push('　日程シートの内容列  : 「' + profile.eventName + '」と完全一致する行');
   lines.push('　保存フォルダ名      : ' + profile.folderName);
   if (profile.folder && profile.folder.mode === 'year') {
@@ -2375,28 +2444,34 @@ function showStatus() {
 /** 毎日 6:00 に実行される司令塔 */
 function dailyPlanner() {
   try {
-    // ① フォームのオープン（5日前）
-    const openTarget = findEventByDaysAhead_(CONFIG.OPEN_DAYS_BEFORE);
-    if (openTarget) {
-      if (setFormAcceptingIfAvailable_(true)) {
-        logInfo_('【オープン】' + formatDateJa_(openTarget.date) + ' のグルコンに向けてフォームを開きました。');
+    const features = getFeatures_();
+
+    if (features.digest) {
+      // ① フォームのオープン（5日前）
+      const openTarget = findEventByDaysAhead_(CONFIG.OPEN_DAYS_BEFORE);
+      if (openTarget) {
+        if (setFormAcceptingIfAvailable_(true)) {
+          logInfo_('【オープン】' + formatDateJa_(openTarget.date) + ' に向けてフォームを開きました。');
+        }
+      }
+
+      // ② 受付期間中なのに閉じていたら開け直す（取りこぼし防止）
+      ensureFormStateForToday_();
+
+      // ③ 今日が前日なら、13:00 と 13:30 の単発トリガーを仕込む
+      const closeTarget = findEventByDaysAhead_(CONFIG.CLOSE_DAYS_BEFORE);
+      if (closeTarget) {
+        scheduleExactJobsForToday_();
+        clearDoneFlag_(closeTarget.date);
       }
     }
 
-    // ② 受付期間中なのに閉じていたら開け直す（取りこぼし防止）
-    ensureFormStateForToday_();
-
-    // ③ 今日が前日なら、13:00 と 13:30 の単発トリガーを仕込む
-    const closeTarget = findEventByDaysAhead_(CONFIG.CLOSE_DAYS_BEFORE);
-    if (closeTarget) {
-      scheduleExactJobsForToday_();
-      clearDoneFlag_(closeTarget.date);
-    }
-
-    // ④ メール下書きの作成（テンプレートシートがある場合のみ）
-    const drafts = createDraftsIfDue_();
-    if (drafts.length > 0) {
-      notifyDrafts_(drafts);
+    // ④ メール下書きの作成
+    if (features.mail) {
+      const drafts = createDraftsIfDue_();
+      if (drafts.length > 0) {
+        notifyDrafts_(drafts);
+      }
     }
   } catch (err) {
     console.error(err);
@@ -2434,6 +2509,7 @@ function removeOneShotTriggers_() {
 /** 13:00 ちょうどに走る：フォームを閉じる */
 function closeFormNow() {
   try {
+    if (!getFeatures_().digest) return;
     const event = findEventByDaysAhead_(CONFIG.CLOSE_DAYS_BEFORE);
     if (!event) {
       logInfo_('今日は前日ではないため、締切処理をスキップしました。');
@@ -2450,6 +2526,7 @@ function closeFormNow() {
 /** 13:30 ちょうどに走る：ドキュメント作成 → Chatwork送信 */
 function buildAndNotifyNow() {
   try {
+    if (!getFeatures_().digest) return;
     const event = findEventByDaysAhead_(CONFIG.CLOSE_DAYS_BEFORE);
     if (!event) {
       logInfo_('今日は前日ではないため、質問まとめをスキップしました。');
@@ -2466,6 +2543,7 @@ function buildAndNotifyNow() {
 /** 毎日 15:00：13:00/13:30 の処理が落ちていた場合の救済 */
 function dailySafetyNet() {
   try {
+    if (!getFeatures_().digest) return;
     const event = findEventByDaysAhead_(CONFIG.CLOSE_DAYS_BEFORE);
     if (!event) return;
 
@@ -2604,28 +2682,39 @@ function manualCloseForm() { closeForm_(); showStatus(); }
  */
 function onOpen() {
   try {
-    SpreadsheetApp.getUi()
-      .createMenu(getProfile_().label + '質問まとめ')
-      .addItem('① 設定状況を確認', 'menuShowStatus')
-      .addItem('② テスト：この回答シート全部でドキュメント作成', 'menuTestAllRows')
-      .addSeparator()
-      .addItem('質問まとめを作成（Chatwork送信なし）', 'menuBuildPreview')
-      .addItem('質問まとめを作成してChatworkへ送信', 'menuBuildAndNotify')
-      .addSeparator()
-      .addItem('フォームを開く', 'menuOpenForm')
-      .addItem('フォームを閉じる', 'menuCloseForm')
-      .addItem('フォームの診断', 'menuDiagnoseForm')
-      .addItem('フォームを登録（URLを貼る）', 'menuSetFormId')
-      .addSeparator()
-      .addItem('メールテンプレートを初期設定', 'menuSetupMailTemplates')
-      .addItem('メール下書きを今すぐ作る', 'menuCreateDrafts')
-      .addItem('アーカイブメールの下書きを作る', 'menuCreateArchiveDraft')
-      .addItem('差し込みプレビュー（下書きなし）', 'menuPreviewDrafts')
-      .addSeparator()
-      .addItem('Chatworkへの接続テスト', 'menuTestChatwork')
-      .addItem('自動実行トリガーを設置', 'menuInstallTriggers')
-      .addItem('本日分の処理に追いつかせる', 'menuCatchUpToday')
-      .addToUi();
+    const profile = getProfile_();
+    const features = getFeatures_();
+    const ui = SpreadsheetApp.getUi();
+    const menu = ui.createMenu(profile.label
+      + (features.digest ? '質問まとめ' : 'メール下書き'));
+
+    menu.addItem('① 設定状況を確認', 'menuShowStatus');
+
+    if (features.digest) {
+      menu.addItem('② テスト：この回答シート全部でドキュメント作成', 'menuTestAllRows')
+          .addSeparator()
+          .addItem('質問まとめを作成（Chatwork送信なし）', 'menuBuildPreview')
+          .addItem('質問まとめを作成してChatworkへ送信', 'menuBuildAndNotify')
+          .addSeparator()
+          .addItem('フォームを開く', 'menuOpenForm')
+          .addItem('フォームを閉じる', 'menuCloseForm')
+          .addItem('フォームの診断', 'menuDiagnoseForm')
+          .addItem('フォームを登録（URLを貼る）', 'menuSetFormId');
+    }
+
+    if (features.mail) {
+      menu.addSeparator()
+          .addItem('メールテンプレートを初期設定', 'menuSetupMailTemplates')
+          .addItem('メール下書きを今すぐ作る', 'menuCreateDrafts')
+          .addItem('アーカイブメールの下書きを作る', 'menuCreateArchiveDraft')
+          .addItem('差し込みプレビュー（下書きなし）', 'menuPreviewDrafts');
+    }
+
+    menu.addSeparator()
+        .addItem('Chatworkへの接続テスト', 'menuTestChatwork')
+        .addItem('自動実行トリガーを設置', 'menuInstallTriggers')
+        .addItem('本日分の処理に追いつかせる', 'menuCatchUpToday')
+        .addToUi();
   } catch (e) {
     console.warn('メニューを作れませんでした（スプレッドシートに紐づいていない可能性）: ' + e);
   }

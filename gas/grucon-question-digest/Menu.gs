@@ -9,28 +9,39 @@
  */
 function onOpen() {
   try {
-    SpreadsheetApp.getUi()
-      .createMenu(getProfile_().label + '質問まとめ')
-      .addItem('① 設定状況を確認', 'menuShowStatus')
-      .addItem('② テスト：この回答シート全部でドキュメント作成', 'menuTestAllRows')
-      .addSeparator()
-      .addItem('質問まとめを作成（Chatwork送信なし）', 'menuBuildPreview')
-      .addItem('質問まとめを作成してChatworkへ送信', 'menuBuildAndNotify')
-      .addSeparator()
-      .addItem('フォームを開く', 'menuOpenForm')
-      .addItem('フォームを閉じる', 'menuCloseForm')
-      .addItem('フォームの診断', 'menuDiagnoseForm')
-      .addItem('フォームを登録（URLを貼る）', 'menuSetFormId')
-      .addSeparator()
-      .addItem('メールテンプレートを初期設定', 'menuSetupMailTemplates')
-      .addItem('メール下書きを今すぐ作る', 'menuCreateDrafts')
-      .addItem('アーカイブメールの下書きを作る', 'menuCreateArchiveDraft')
-      .addItem('差し込みプレビュー（下書きなし）', 'menuPreviewDrafts')
-      .addSeparator()
-      .addItem('Chatworkへの接続テスト', 'menuTestChatwork')
-      .addItem('自動実行トリガーを設置', 'menuInstallTriggers')
-      .addItem('本日分の処理に追いつかせる', 'menuCatchUpToday')
-      .addToUi();
+    const profile = getProfile_();
+    const features = getFeatures_();
+    const ui = SpreadsheetApp.getUi();
+    const menu = ui.createMenu(profile.label
+      + (features.digest ? '質問まとめ' : 'メール下書き'));
+
+    menu.addItem('① 設定状況を確認', 'menuShowStatus');
+
+    if (features.digest) {
+      menu.addItem('② テスト：この回答シート全部でドキュメント作成', 'menuTestAllRows')
+          .addSeparator()
+          .addItem('質問まとめを作成（Chatwork送信なし）', 'menuBuildPreview')
+          .addItem('質問まとめを作成してChatworkへ送信', 'menuBuildAndNotify')
+          .addSeparator()
+          .addItem('フォームを開く', 'menuOpenForm')
+          .addItem('フォームを閉じる', 'menuCloseForm')
+          .addItem('フォームの診断', 'menuDiagnoseForm')
+          .addItem('フォームを登録（URLを貼る）', 'menuSetFormId');
+    }
+
+    if (features.mail) {
+      menu.addSeparator()
+          .addItem('メールテンプレートを初期設定', 'menuSetupMailTemplates')
+          .addItem('メール下書きを今すぐ作る', 'menuCreateDrafts')
+          .addItem('アーカイブメールの下書きを作る', 'menuCreateArchiveDraft')
+          .addItem('差し込みプレビュー（下書きなし）', 'menuPreviewDrafts');
+    }
+
+    menu.addSeparator()
+        .addItem('Chatworkへの接続テスト', 'menuTestChatwork')
+        .addItem('自動実行トリガーを設置', 'menuInstallTriggers')
+        .addItem('本日分の処理に追いつかせる', 'menuCatchUpToday')
+        .addToUi();
   } catch (e) {
     console.warn('メニューを作れませんでした（スプレッドシートに紐づいていない可能性）: ' + e);
   }
