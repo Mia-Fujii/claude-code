@@ -2017,15 +2017,22 @@ function setupMailTemplates() {
         existing[String(r[0] || '').trim()] = true;
       });
     }
+    // すでに別の名前で入っている場合は追加しません（aliases のどれかがあればOK）
     const wanted = [
-      ['プラチナグルコン事前フォームURL', '', '🟡 案内メールに載せる回答用URL'],
-      ['合宿予定', '＜合宿＞\n11月：東京　六本木付近\n12日（木）13日（金）',
-       '🟡 アーカイブメールの {{合宿予定}} に入ります'],
+      { aliases: ['プラチナグルコン事前フォームURL', 'グルコン事前フォームURL', '事前フォームURL'],
+        row: ['事前フォームURL', '', '🟡 案内メールに載せる回答用URL'] },
+      { aliases: ['合宿予定'],
+        row: ['合宿予定', '11月：東京　六本木付近\n12日（木）13日（金）',
+              '🟡 アーカイブメールの {{合宿予定}} に入ります'] },
     ];
-    wanted.forEach(function (row) {
-      if (existing[row[0]]) return;
-      settingsSheet.appendRow(row);
-      added.push('「基本設定」に『' + row[0] + '』を追加しました');
+    wanted.forEach(function (item) {
+      const found = item.aliases.filter(function (a) { return existing[a]; });
+      if (found.length > 0) {
+        added.push('「基本設定」の『' + found[0] + '』はすでにあります（変更していません）');
+        return;
+      }
+      settingsSheet.appendRow(item.row);
+      added.push('「基本設定」に『' + item.row[0] + '』を追加しました');
     });
   }
 
