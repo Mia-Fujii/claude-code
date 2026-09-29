@@ -80,6 +80,17 @@ const CONFIG = {
   /** 毎朝この時刻に下書きを作ります */
   DRAFT_HOUR: 7,
 
+  /**
+   * メールをHTML形式でも作るか。
+   *
+   *   false … プレーンテキストのみ（既定・今までと同じ見た目）
+   *            本文中のURLは、Gmailなど受信側のメールソフトが
+   *            自動でリンクにするので、通常はクリックできます。
+   *   true  … HTML版も一緒に作り、URLを確実に <a> タグのリンクにします。
+   *            改行や行間はそのまま保たれます。
+   */
+  HTML_BODY: false,
+
   /** true にすると Chatwork に送らず、ログに出すだけ */
   DRY_RUN: false,
 
@@ -286,13 +297,34 @@ function createArchiveDraft_(event) {
 
 /** Gmailに下書きを作る（宛先は空） */
 function createGmailDraft_(subject, body) {
+  const options = CONFIG.HTML_BODY ? { htmlBody: toHtmlBody_(body) } : {};
   try {
-    GmailApp.createDraft('', subject, body);
+    GmailApp.createDraft('', subject, body, options);
   } catch (e) {
     logInfo_('宛先が空の下書きを作れなかったため、自分宛で作成します：' + e);
-    GmailApp.createDraft(Session.getEffectiveUser().getEmail(), subject, body);
+    GmailApp.createDraft(Session.getEffectiveUser().getEmail(), subject, body, options);
   }
   logInfo_('下書きを作成しました：' + subject);
+}
+
+/**
+ * プレーンテキストの本文を、見た目を変えずにHTMLへ変換する。
+ * ・URLを <a> タグのリンクにする
+ * ・改行・空行はそのまま（white-space: pre-wrap）
+ */
+function toHtmlBody_(text) {
+  const escaped = String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  const linked = escaped.replace(/https?:\/\/[^\s<>"']+/g, function (url) {
+    // 行末の句読点などはリンクに含めない
+    const trimmed = url.replace(/[。、．，)）」】]+$/, '');
+    const tail = url.slice(trimmed.length);
+    return '<a href="' + trimmed + '">' + trimmed + '</a>' + tail;
+  });
+  return '<div style="font-family:sans-serif;font-size:14px;white-space:pre-wrap;">'
+    + linked + '</div>';
 }
 
 // ═══════════════════════════════════════════════════════════════
