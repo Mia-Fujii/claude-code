@@ -40,7 +40,8 @@
  *  やること：
  *    ・「メールセット」列の日付になった朝に
  *      「3日前」「前日」「当日」の3通をGmailの【下書き】として作る
- *    ・「アーカイブ動画URL」を入力すると、翌朝にアーカイブメールの下書きを作る
+ *    ・活動報告まとめドキュメントができたら、そのリンクを入れて
+ *      アーカイブメールの下書きを作る（録画URLは空欄のまま）
  *    ・作ったらChatworkに通知する
  *
  *  やらないこと：
@@ -76,6 +77,13 @@ const CONFIG = {
 
   /** 提出期限は開催日の何日前か（1 = 前日） */
   DEADLINE_DAYS_BEFORE: 1,
+
+  /**
+   * アーカイブメールの録画URLは、下書きを開いてから手で貼る運用です。
+   * 貼り忘れないよう、空欄のかわりにこの文言を入れておきます。
+   * （スケジュールの「アーカイブ動画URL」に入力があれば、そちらが優先されます）
+   */
+  ARCHIVE_URL_PLACEHOLDER: '（ここに録画のURLを貼ってください）',
 
   /** 毎朝この時刻に下書きを作ります */
   DRAFT_HOUR: 7,
@@ -247,14 +255,15 @@ function createDraftsIfDue_() {
     }
 
     // ── アーカイブ ──
-    if (event.archiveUrl
-        && status.indexOf('アーカイブ') < 0
-        && startOfDay_(event.date).getTime() <= today.getTime()) {
+    //    活動報告まとめドキュメントができたら作ります。
+    //    （録画URLは空欄のままで、下書きを開いてから貼る運用です）
+    if (event.digestUrl && status.indexOf('アーカイブ') < 0) {
       createArchiveDraft_(event);
       writeCell_(event, CONFIG.HEADERS.draftStatus,
         appendStatus_(String(event.draftStatus || ''),
           'アーカイブ ' + formatDate_(new Date(), 'M/d')));
-      done.push(formatDateJaLong_(event.date) + ' のアーカイブ下書きを作成');
+      done.push(formatDateJaLong_(event.date) + ' のアーカイブ下書きを作成'
+        + (event.archiveUrl ? '' : '（★録画URLは空欄です。下書きに貼ってください）'));
     }
   });
 
@@ -358,7 +367,8 @@ function fillTemplate_(text, event) {
     '事前フォームURL':   setting(['プラチナグルコン事前フォームURL', 'グルコン事前フォームURL', '事前フォームURL']),
     '合宿予定':          setting(['合宿予定']),
     '署名':              setting(['署名', '事務局差出人名']) || 'Shine A Light 運営事務局',
-    'アーカイブ動画URL': String(event.archiveUrl || ''),
+    'アーカイブ動画URL': String(event.archiveUrl || '').trim()
+                         || CONFIG.ARCHIVE_URL_PLACEHOLDER,
     '活動報告まとめURL': String(event.digestUrl || ''),
     '今後の日程':        buildUpcomingSchedule_(event.date),
   };
@@ -542,9 +552,11 @@ function sendChatwork_(message) {
 function notifyDrafts_(lines) {
   try {
     const mention = String(readSettings_()['Chatwork メンション先'] || '').trim();
+    const needsUrl = lines.some(function (l) { return l.indexOf('録画URLは空欄') >= 0; });
     sendChatwork_((mention ? mention + '\n' : '')
       + 'メールの下書きを作成しました。\n'
       + 'Gmailの「下書き」を確認し、宛先を入れて送信予約をお願いします。\n'
+      + (needsUrl ? 'アーカイブメールは、録画のURLを貼ってから送信してください。\n' : '')
       + '\n[info][title]作成した下書き[/title]'
       + lines.map(function (l) { return '・' + l; }).join('\n')
       + '[/info]');
@@ -682,6 +694,9 @@ function showStatus() {
         + (next.mailSetDate ? formatDateJaLong_(next.mailSetDate) + ' の朝'
            : '⚠「メールセット」列が空です'));
       lines.push('  下書き作成の記録    : ' + (next.draftStatus || '（まだ）'));
+      lines.push('  活動報告まとめURL   : ' + (next.digestUrl
+        ? '入力あり（アーカイブ下書きを作れます）'
+        : '（まだ。まとめ作成時に自動で入ります）'));
     } else {
       lines.push('  次回                : （今日以降の予定なし）');
     }
@@ -707,17 +722,21 @@ function manualCreatePreEventDrafts() {
     + made.join(' / ') + '）\n\nGmailの「下書き」を確認してください。\n宛先は空です。';
 }
 
-/** アーカイブ動画URLが入っている直近の回のアーカイブ下書きを作る */
+/** 活動報告まとめURLが入っている直近の回のアーカイブ下書きを作る */
 function manualCreateArchiveDraft() {
-  const events = listEvents_().filter(function (e) { return e.archiveUrl; });
+  const events = listEvents_().filter(function (e) { return e.digestUrl; });
   if (events.length === 0) {
-    throw new Error('「アーカイブ動画URL」が入力された回がありません。\n'
-      + 'スケジュールシートに動画URLを入れてから実行してください。');
+    throw new Error('「活動報告まとめURL」が入力された回がありません。\n\n'
+      + 'まとめドキュメントができると、質問まとめ側のGASが自動で書き込みます。\n'
+      + '手で入れる場合は、スケジュールシートの「活動報告まとめURL」列に\n'
+      + 'ドキュメントのURLを貼ってから実行してください。');
   }
   const event = events[events.length - 1];
   const subject = createArchiveDraft_(event);
   return formatDateJaLong_(event.date) + ' のアーカイブ下書きを作成しました。\n\n'
-    + subject + '\n\nGmailの「下書き」を確認してください。';
+    + subject + '\n\nGmailの「下書き」を確認し、'
+    + (event.archiveUrl ? '' : '★録画のURLを貼って')
+    + '送信してください。';
 }
 
 /** 差し込み結果をログで確認する（下書きは作りません） */
