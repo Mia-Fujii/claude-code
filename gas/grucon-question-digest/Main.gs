@@ -137,6 +137,15 @@ function showStatus() {
       lines.push('期（基本設定B2）      : ⚠ ' + e.message);
     }
   }
+  try {
+    const active = SpreadsheetApp.getActiveSpreadsheet();
+    if (active) {
+      const id = active.getId();
+      const where = (id === getResponseSpreadsheetId_()) ? '回答シート'
+        : (id === getMasterSpreadsheetId_()) ? '日程シート' : '⚠ 未登録のシート';
+      lines.push('貼り付け先            : ' + active.getName() + '（' + where + '）');
+    }
+  } catch (e) { /* noop */ }
   lines.push('日程スプレッドシート  : ' + (getMasterSpreadsheetId_() || '⚠ 未設定'));
   lines.push('保存先ルートフォルダ  : ' + ((profile.folder && profile.folder.rootFolderId) || '⚠ 未設定')
     + '（' + (profile.folder && profile.folder.mode === 'year' ? '年フォルダ方式' : '期フォルダ方式') + '）');

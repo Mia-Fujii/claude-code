@@ -162,9 +162,14 @@ var PROFILE_CACHE_ = null;
 
 /**
  * このスクリプトがどのイベント用かを判定する。
+ *
  * ① スクリプトプロパティ PROFILE が設定されていればそれを使う
- * ② 貼り付けられている回答スプレッドシートのIDから自動判別
+ * ② 貼り付けられているスプレッドシートのIDから自動判別
+ *    ・回答スプレッドシート  → そのプロファイル
+ *    ・日程スプレッドシート  → そのプロファイル（1つに絞れる場合のみ）
  * ③ どちらでもなければ DEFAULT_PROFILE
+ *
+ * 回答シート・日程シートのどちらに貼っても正しく動きます。
  */
 function getProfile_() {
   if (PROFILE_CACHE_) return PROFILE_CACHE_;
@@ -179,14 +184,34 @@ function getProfile_() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     if (ss) {
       const id = ss.getId();
+
+      // ── 回答スプレッドシートに貼られている場合 ──
       for (var key in PROFILES) {
         if (PROFILES[key].responseSpreadsheetId === id) {
           PROFILE_CACHE_ = PROFILES[key];
           return PROFILE_CACHE_;
         }
       }
-      console.warn('このスプレッドシート（' + id + '）はPROFILESに登録されていません。'
-        + '「' + DEFAULT_PROFILE + '」の設定で動きます。');
+
+      // ── 日程スプレッドシートに貼られている場合 ──
+      //    複数のイベントが同じ日程シートを使っていると絞れないため、
+      //    1つだけ一致するときに限って採用します。
+      const byMaster = [];
+      for (var k2 in PROFILES) {
+        if (PROFILES[k2].masterSpreadsheetId === id) byMaster.push(PROFILES[k2]);
+      }
+      if (byMaster.length === 1) {
+        PROFILE_CACHE_ = byMaster[0];
+        return PROFILE_CACHE_;
+      }
+      if (byMaster.length > 1) {
+        console.warn('この日程スプレッドシートは複数のイベントで共用されているため、'
+          + 'どのイベントか判別できません（' + byMaster.map(function (p) { return p.label; }).join(' / ')
+          + '）。スクリプトプロパティ PROFILE でイベント名を指定してください。');
+      } else {
+        console.warn('このスプレッドシート（' + id + '）はPROFILESに登録されていません。'
+          + '「' + DEFAULT_PROFILE + '」の設定で動きます。');
+      }
     }
   } catch (e) {
     // スプレッドシートに紐づいていない場合はここに来る
@@ -633,13 +658,16 @@ function writeDigestUrl_(event, url) {
 
 /** 回答スプレッドシートのシートを取得 */
 function getResponseSheet_() {
-  // ① 貼り付けられているスプレッドシートをそのまま使う
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  // ② スタンドアロン実行時は、設定またはプロファイルのIDを使う
-  if (!ss) {
-    const id = getResponseSpreadsheetId_();
-    if (!id) throw new Error('回答スプレッドシートが特定できません。');
+  var ss = null;
+  // ① 設定／プロファイルに回答シートのIDがあれば、それを使う
+  //    （このスクリプトを日程シートに貼っていても取り違えません）
+  const id = getResponseSpreadsheetId_();
+  if (id) {
     ss = SpreadsheetApp.openById(id);
+  } else {
+    // ② IDが無ければ、貼り付けられているスプレッドシートを使う
+    ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) throw new Error('回答スプレッドシートが特定できません。');
   }
   if (CONFIG.RESPONSE_SHEET_NAME) {
     const sheet = ss.getSheetByName(CONFIG.RESPONSE_SHEET_NAME);
@@ -2260,6 +2288,15 @@ function showStatus() {
       lines.push('期（基本設定B2）      : ⚠ ' + e.message);
     }
   }
+  try {
+    const active = SpreadsheetApp.getActiveSpreadsheet();
+    if (active) {
+      const id = active.getId();
+      const where = (id === getResponseSpreadsheetId_()) ? '回答シート'
+        : (id === getMasterSpreadsheetId_()) ? '日程シート' : '⚠ 未登録のシート';
+      lines.push('貼り付け先            : ' + active.getName() + '（' + where + '）');
+    }
+  } catch (e) { /* noop */ }
   lines.push('日程スプレッドシート  : ' + (getMasterSpreadsheetId_() || '⚠ 未設定'));
   lines.push('保存先ルートフォルダ  : ' + ((profile.folder && profile.folder.rootFolderId) || '⚠ 未設定')
     + '（' + (profile.folder && profile.folder.mode === 'year' ? '年フォルダ方式' : '期フォルダ方式') + '）');
@@ -3060,8 +3097,9 @@ function testBuildFromAllRows(spreadsheetUrlOrId) {
   const profile = getProfile_();
   const ss = spreadsheetUrlOrId
     ? SpreadsheetApp.openById(extractId_(spreadsheetUrlOrId))
-    : (SpreadsheetApp.getActiveSpreadsheet()
-       || SpreadsheetApp.openById(getResponseSpreadsheetId_()));
+    : (getResponseSpreadsheetId_()
+       ? SpreadsheetApp.openById(getResponseSpreadsheetId_())
+       : SpreadsheetApp.getActiveSpreadsheet());
   const sheet = CONFIG.RESPONSE_SHEET_NAME
     ? ss.getSheetByName(CONFIG.RESPONSE_SHEET_NAME)
     : ss.getSheets()[0];

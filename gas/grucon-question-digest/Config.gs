@@ -123,9 +123,14 @@ var PROFILE_CACHE_ = null;
 
 /**
  * このスクリプトがどのイベント用かを判定する。
+ *
  * ① スクリプトプロパティ PROFILE が設定されていればそれを使う
- * ② 貼り付けられている回答スプレッドシートのIDから自動判別
+ * ② 貼り付けられているスプレッドシートのIDから自動判別
+ *    ・回答スプレッドシート  → そのプロファイル
+ *    ・日程スプレッドシート  → そのプロファイル（1つに絞れる場合のみ）
  * ③ どちらでもなければ DEFAULT_PROFILE
+ *
+ * 回答シート・日程シートのどちらに貼っても正しく動きます。
  */
 function getProfile_() {
   if (PROFILE_CACHE_) return PROFILE_CACHE_;
@@ -140,14 +145,34 @@ function getProfile_() {
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     if (ss) {
       const id = ss.getId();
+
+      // ── 回答スプレッドシートに貼られている場合 ──
       for (var key in PROFILES) {
         if (PROFILES[key].responseSpreadsheetId === id) {
           PROFILE_CACHE_ = PROFILES[key];
           return PROFILE_CACHE_;
         }
       }
-      console.warn('このスプレッドシート（' + id + '）はPROFILESに登録されていません。'
-        + '「' + DEFAULT_PROFILE + '」の設定で動きます。');
+
+      // ── 日程スプレッドシートに貼られている場合 ──
+      //    複数のイベントが同じ日程シートを使っていると絞れないため、
+      //    1つだけ一致するときに限って採用します。
+      const byMaster = [];
+      for (var k2 in PROFILES) {
+        if (PROFILES[k2].masterSpreadsheetId === id) byMaster.push(PROFILES[k2]);
+      }
+      if (byMaster.length === 1) {
+        PROFILE_CACHE_ = byMaster[0];
+        return PROFILE_CACHE_;
+      }
+      if (byMaster.length > 1) {
+        console.warn('この日程スプレッドシートは複数のイベントで共用されているため、'
+          + 'どのイベントか判別できません（' + byMaster.map(function (p) { return p.label; }).join(' / ')
+          + '）。スクリプトプロパティ PROFILE でイベント名を指定してください。');
+      } else {
+        console.warn('このスプレッドシート（' + id + '）はPROFILESに登録されていません。'
+          + '「' + DEFAULT_PROFILE + '」の設定で動きます。');
+      }
     }
   } catch (e) {
     // スプレッドシートに紐づいていない場合はここに来る

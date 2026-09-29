@@ -152,8 +152,9 @@ function testBuildFromAllRows(spreadsheetUrlOrId) {
   const profile = getProfile_();
   const ss = spreadsheetUrlOrId
     ? SpreadsheetApp.openById(extractId_(spreadsheetUrlOrId))
-    : (SpreadsheetApp.getActiveSpreadsheet()
-       || SpreadsheetApp.openById(getResponseSpreadsheetId_()));
+    : (getResponseSpreadsheetId_()
+       ? SpreadsheetApp.openById(getResponseSpreadsheetId_())
+       : SpreadsheetApp.getActiveSpreadsheet());
   const sheet = CONFIG.RESPONSE_SHEET_NAME
     ? ss.getSheetByName(CONFIG.RESPONSE_SHEET_NAME)
     : ss.getSheets()[0];

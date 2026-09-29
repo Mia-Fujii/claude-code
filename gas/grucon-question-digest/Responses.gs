@@ -4,13 +4,16 @@
 
 /** 回答スプレッドシートのシートを取得 */
 function getResponseSheet_() {
-  // ① 貼り付けられているスプレッドシートをそのまま使う
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  // ② スタンドアロン実行時は、設定またはプロファイルのIDを使う
-  if (!ss) {
-    const id = getResponseSpreadsheetId_();
-    if (!id) throw new Error('回答スプレッドシートが特定できません。');
+  var ss = null;
+  // ① 設定／プロファイルに回答シートのIDがあれば、それを使う
+  //    （このスクリプトを日程シートに貼っていても取り違えません）
+  const id = getResponseSpreadsheetId_();
+  if (id) {
     ss = SpreadsheetApp.openById(id);
+  } else {
+    // ② IDが無ければ、貼り付けられているスプレッドシートを使う
+    ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) throw new Error('回答スプレッドシートが特定できません。');
   }
   if (CONFIG.RESPONSE_SHEET_NAME) {
     const sheet = ss.getSheetByName(CONFIG.RESPONSE_SHEET_NAME);
