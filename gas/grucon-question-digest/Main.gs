@@ -137,16 +137,22 @@ function showStatus() {
   lines.push('── 設定状況 ──────────────────────────');
   lines.push('対象イベント          : ' + profile.label);
   lines.push('この スクリプトの担当  : ' + describeFeatures_());
-  lines.push('　日程シートの内容列  : 「' + profile.eventName + '」と完全一致する行');
-  lines.push('　保存フォルダ名      : ' + profile.folderName);
-  if (profile.folder && profile.folder.mode === 'year') {
-    lines.push('保存先の年フォルダ    : 開催年から自動（例 2026' + (profile.folder.yearSuffix || '年度') + '）');
+  lines.push('　日程シートの対象行  : ' + (profile.eventName
+    ? '「内容」列が「' + profile.eventName + '」と完全一致する行'
+    : '全行（「内容」列は見ません）'));
+
+  const spec = profile.folder || {};
+  if (spec.mode === 'year') {
+    lines.push('　保存先            : ルート / ' + '{開催年}' + (spec.yearSuffix || '年度')
+      + (spec.name ? ' / ' + spec.name : '') + '（暦年で自動切替）');
   } else {
+    var term = '{期}';
     try {
-      lines.push('期（基本設定B2）      : ' + getTermName_());
+      term = getTermName_();
     } catch (e) {
-      lines.push('期（基本設定B2）      : ⚠ ' + e.message);
+      term = '⚠ ' + e.message;
     }
+    lines.push('　保存先            : ルート / ' + term + (spec.name ? ' / ' + spec.name : ''));
   }
   try {
     const active = SpreadsheetApp.getActiveSpreadsheet();
