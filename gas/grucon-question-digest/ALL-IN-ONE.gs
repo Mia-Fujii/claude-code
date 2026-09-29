@@ -1,6 +1,6 @@
 /**
  * ═══════════════════════════════════════════════════════════════
- *  事前質問まとめ 自動化（全部入り 1ファイル版）
+ *  事前質問まとめ ＋ メール下書き 自動化（全部入り 1ファイル版）
  *  グルコン ／ ビギナーグルコン ／ 課題作業会 ／ プラチナグルコン 共用
  * ═══════════════════════════════════════════════════════════════
  *
@@ -18,8 +18,15 @@
  *    3. メニュー →「① 設定状況を確認」で【対象イベント】が正しいか確認
  *    4. メニュー →「自動実行トリガーを設置」
  *
+ *  ── メール下書きも使う場合（プラチナグルコン）──────────
+ *    5. メニュー →「メールテンプレートを初期設定」
+ *       → 日程スプレッドシートに必要なシートと列が自動で作られます
+ *    6. 「基本設定」の『プラチナグルコン事前フォームURL』『合宿予定』を埋める
+ *    7. メニュー →「差し込みプレビュー（下書きなし）」で中身を確認
+ *
  *  ※ Chatworkのトークンはスクリプトごとに登録が必要です
  *     （setChatworkCredentials を実行）
+ *  ※ 下書きは【このスクリプトを動かしているアカウント】のGmailに入ります
  *
  *  詳しい手順は README.md を参照してください。
  * ═══════════════════════════════════════════════════════════════
@@ -205,7 +212,15 @@ const CONFIG = {
     startTime: '開始時間',
     endTime: '終了時間',
     owner: '担当者',        // 無い場合は「担当：」の行が出ません
+    // ── メール下書き機能で使う列（無くても動きます）──
+    mailSet: 'メールセット',          // この日付の朝に事前案内3通の下書きを作ります
+    archiveUrl: 'アーカイブ動画URL',   // 手入力
+    digestUrl: '活動報告まとめURL',    // まとめ作成時に自動で書き込まれます
+    draftStatus: '下書き作成',         // 下書きを作った記録（自動）
   },
+
+  /** メール下書きを作る時刻（毎朝） */
+  DRAFT_HOUR: 7,
 
   // ── 回答スプレッドシートの共通列（1始まり） ─────────────
   RESPONSE_SHEET_NAME: '',   // 空ならブックの最初のシート
@@ -513,6 +528,10 @@ function listTargetEvents_() {
   const iStart = header.indexOf(H.startTime);
   const iEnd = header.indexOf(H.endTime);
   const iOwner = header.indexOf(H.owner);
+  const iMailSet = header.indexOf(H.mailSet);
+  const iArchive = header.indexOf(H.archiveUrl);
+  const iDigest = header.indexOf(H.digestUrl);
+  const iStatus = header.indexOf(H.draftStatus);
 
   const target = getProfile_().eventName;
   const events = [];
@@ -530,6 +549,10 @@ function listTargetEvents_() {
       startTime: iStart >= 0 ? formatTime_(row[iStart]) : '',
       endTime: iEnd >= 0 ? formatTime_(row[iEnd]) : '',
       owner: iOwner >= 0 ? String(row[iOwner] || '').trim() : '',
+      mailSetDate: iMailSet >= 0 ? toDate_(row[iMailSet]) : null,
+      archiveUrl: iArchive >= 0 ? String(row[iArchive] || '').trim() : '',
+      digestUrl: iDigest >= 0 ? String(row[iDigest] || '').trim() : '',
+      draftStatus: iStatus >= 0 ? String(row[iStatus] || '').trim() : '',
       row: r + 1,
     });
   }
@@ -565,6 +588,38 @@ function getCollectionWindow_(eventDate) {
   const end = addDays_(eventDate, -CONFIG.CLOSE_DAYS_BEFORE);
   end.setHours(CONFIG.CLOSE_HOUR, CONFIG.CLOSE_MINUTE, 0, 0);
   return { start: start, end: end };
+}
+
+// ─────────────────────────────────────────────────────────
+//  日程シートへの書き戻し
+// ─────────────────────────────────────────────────────────
+
+/**
+ * 日程シートの指定した列に値を書き込む。
+ * その列が無いシート（列を足していない場合）では何もしません。
+ * @return {boolean} 書き込んだか
+ */
+function writeScheduleCell_(event, headerName, value) {
+  if (!event || !event.row) return false;
+  const sheet = getScheduleSheet_();
+  const header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]
+    .map(function (h) { return String(h || '').trim(); });
+  const idx = header.indexOf(headerName);
+  if (idx < 0) return false;
+  sheet.getRange(event.row, idx + 1).setValue(value);
+  return true;
+}
+
+/** 「下書き作成」列に記録する */
+function writeDraftStatus_(event, value) {
+  return writeScheduleCell_(event, CONFIG.SCHEDULE_HEADERS.draftStatus, value);
+}
+
+/** 「活動報告まとめURL」列にドキュメントのURLを書き戻す */
+function writeDigestUrl_(event, url) {
+  const wrote = writeScheduleCell_(event, CONFIG.SCHEDULE_HEADERS.digestUrl, url);
+  if (wrote) logInfo_('日程シートの「' + CONFIG.SCHEDULE_HEADERS.digestUrl + '」に書き戻しました。');
+  return wrote;
 }
 
 
@@ -1335,6 +1390,725 @@ function notifyError_(context, err) {
   }
 }
 
+/** メール下書きを作ったことをChatworkに知らせる */
+function notifyDrafts_(lines) {
+  try {
+    const settings = readSettings_();
+    const mention = String(settings['Chatwork メンション先'] || '').trim();
+    const message = (mention ? mention + '\n' : '')
+      + 'メールの下書きを作成しました。\n'
+      + 'Gmailの「下書き」を確認し、宛先を入れて送信予約をお願いします。\n'
+      + '\n[info][title]作成した下書き[/title]'
+      + lines.map(function (l) { return '・' + l; }).join('\n')
+      + '[/info]';
+    sendChatwork_(message);
+  } catch (e) {
+    console.warn('下書き通知の送信に失敗しました: ' + e);
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// MailTemplates.gs
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * プラチナグルコンのメール雛形（初期設定用）
+ *
+ * setupMailTemplates() を実行すると、この内容が
+ * 日程スプレッドシートの「メールテンプレート」シートに書き込まれます。
+ * 以降の文言修正は、コードではなく【シート側】で行ってください。
+ */
+
+const KOUFU_BLOCK_ =
+'【グルコンで添削をご希望の場合の注意点】\n' +
+'\n' +
+'グルコンで「添削」を希望される方は、下記の要領でご提出ください。\n' +
+'円滑かつ公平な進行のため、ご協力をお願いいたします。\n' +
+'\n' +
+'■ 対象物\n' +
+'・スライド\n' +
+'・SNS（プロフィール含む）\n' +
+'・LP\n' +
+'・ホームページ\n' +
+'・Googleドキュメント\n' +
+'など\n' +
+'\n' +
+'■ 提出方法\n' +
+'1. 事前質問フォームに、対象物のURLリンクを必ず貼り付けてください。\n' +
+'2. リンクの閲覧権限を「リンクを知っている全員が閲覧可」に設定してください。（Canva、Googleドキュメント）\n' +
+'\n' +
+'※グルコン直前の個別メッセージでのリンク送付は受け付けておりません。\n' +
+'\n' +
+'■ 質問の書き方\n' +
+'「見てほしいです／添削してください」の一言ではなく、以下を具体的にお書きください。\n' +
+'\n' +
+'・特に見てほしい箇所（例：◯ページのヘッドコピー、文言 など）\n' +
+'・現状と目的\n' +
+'・相談内容・質問（例：A/Bどちらの表現が適切か、第一印象を強める改善案が欲しい など）\n' +
+'\n' +
+'■ 受付できないケース\n' +
+'・リンク未記載のご提出\n' +
+'・個別メッセージでの直前送付\n' +
+'・閲覧権限が付与されていないリンク';
+
+const SIGNATURE_ = 'Shine A Light 運営事務局';
+
+const MAIL_TEMPLATES_ = [
+
+  ['3日前',
+   '【重要】プラチナメンバー限定グルコン！活動報告提出のお願い《{{提出期限短}}12時まで》',
+'※このメールは"Shine A Light"のプラチナプログラムに参加されている方へお送りしております。\n' +
+'\n' +
+'こんにちは。\n' +
+'“Shine A Light”運営事務局です。\n' +
+'\n' +
+'【{{日程}} {{時間帯}}  】\n' +
+'にプラチナグルコンがございます。\n' +
+'\n' +
+'\n' +
+'プラチナグルコン前に、\n' +
+'活動報告をみなさまにご提出いただきたく\n' +
+'ご連絡させていただきます。\n' +
+'\n' +
+'どんな小さなことでも\n' +
+'ハッピーシェアは特に大歓迎です！\n' +
+'\n' +
+'また、リストの増加、売上の増加に関することは、\n' +
+'具体的な数字のご報告もぜひお願いいたします！！\n' +
+'\n' +
+'それぞれの成功事例、成功法則をシェアし合って、\n' +
+'仲間で前へ突き進んで参りましょう〜＾＾\n' +
+'\n' +
+'\n' +
+'＝＝＝＝\n' +
+'\n' +
+'【重要：活動報告のご提出】\n' +
+'\n' +
+'\n' +
+'以下フォームより\n' +
+'ご自身が活動されたことについて\n' +
+'ご報告くださいませ。\n' +
+'（小さなハッピーシェアも大歓迎！）\n' +
+'\n' +
+'\n' +
+'また、困っていること、相談したいことが\n' +
+'ありましたら何でも、\n' +
+'どんな小さなことでもいいのでお送りください。\n' +
+'\n' +
+'\n' +
+'【提出期限】\n' +
+'{{提出期限}}お昼12時まで\n' +
+'\n' +
+'\n' +
+'プラチナグルコン事前活動報告フォーム＞＞\n' +
+'{{事前フォームURL}}\n' +
+'\n' +
+'\n' +
+KOUFU_BLOCK_ + '\n' +
+'\n' +
+'\n' +
+'＝＝＝＝\n' +
+'\n' +
+'\n' +
+'ご案内は以上です。\n' +
+'\n' +
+'ご不明な点等ある場合は\n' +
+'当メールの返信にてご連絡ください。\n' +
+'\n' +
+'\n' +
+SIGNATURE_],
+
+  ['前日',
+   '【重要】明日{{開始時}}〜プラチナメンバー限定グルコン詳細・活動報告提出は本日12時まで',
+'※このメールは"Shine A Light"のプラチナプログラムに参加されている方へお送りしております。\n' +
+'\n' +
+'こんにちは。\n' +
+'“Shine A Light”運営事務局です。\n' +
+'\n' +
+'明日のプラチナグルコンの詳細のお知らせと\n' +
+'活動報告提出のお願いです。\n' +
+'\n' +
+'明日【{{日程}} {{時間帯}}】に\n' +
+'プラチナグルコンがございます。\n' +
+'\n' +
+'\n' +
+'＝＝＝＝＝＝＝\n' +
+'\n' +
+'【グルコン参加URL（Zoom）】\n' +
+'\n' +
+'{{zoomリンク}}\n' +
+'\n' +
+'ミーティングID: {{ミーティングID}}\n' +
+'\n' +
+'＝＝＝＝＝＝＝\n' +
+'\n' +
+'※グルコン動画は、後日アーカイブを送付いたします。\n' +
+'当日ご都合がつかない方は、アーカイブをご活用ください。\n' +
+'\n' +
+'\n' +
+'※欠席される方は連絡不要です。\n' +
+'質問をお送りいただく場合のみ、\n' +
+'フォームに一言、欠席についてお書きくださいませ。\n' +
+'\n' +
+'\n' +
+'【活動報告のご提出期限は\n' +
+'　本日{{提出期限}}お昼12時まで！】\n' +
+'\n' +
+'\n' +
+'どんな小さなことでも\n' +
+'ハッピーシェアは特に大歓迎です！\n' +
+'\n' +
+'ご自身が活動されたことについて\n' +
+'ご報告くださいませ。\n' +
+'\n' +
+'リストの増加、売上の増加に関することは、\n' +
+'具体的な数字のご報告もぜひお願いいたします！！\n' +
+'\n' +
+'また、困っていること、相談したいことが\n' +
+'ありましたら何でも、\n' +
+'どんな小さなことでもいいのでお送りください。\n' +
+'\n' +
+'それぞれの成功事例、成功法則をシェアし合って、\n' +
+'仲間で前へ突き進んで参りましょう〜＾＾\n' +
+'\n' +
+'\n' +
+'＝＝＝＝＝＝＝\n' +
+'\n' +
+'▼プラチナグルコン事前活動報告フォーム▼\n' +
+'{{事前フォームURL}}\n' +
+'\n' +
+'＝＝＝＝＝＝＝\n' +
+'\n' +
+'\n' +
+'「プラチナグルコンの報告＆質問のまとめ」には、提出期限までに\n' +
+'専用フォームよりご提出いただいた内容のみを掲載させていただきます。\n' +
+'\n' +
+'提出期限を過ぎてから、ヴォンドラ高橋若菜宛に\n' +
+'個別でご連絡いただいた場合でも、内容の掲載はいたしかねますので\n' +
+'あらかじめご了承ください。\n' +
+'\n' +
+'必ず提出期限内にご提出をお願いいたします。\n' +
+'\n' +
+'なお、受付期限を過ぎたご質問については、グルコン当日に時間がある場合、\n' +
+'その場でお受けいたします。\n' +
+'\n' +
+'\n' +
+KOUFU_BLOCK_ + '\n' +
+'\n' +
+'\n' +
+'ご案内は以上です。\n' +
+'\n' +
+'ご不明な点等ある場合は\n' +
+'当メールの返信にてご連絡ください。\n' +
+'\n' +
+'\n' +
+SIGNATURE_],
+
+  ['当日',
+   '【重要】本日{{開始時}}～プラチナメンバー限定グルコン詳細',
+'※このメールは、"Shine A Light"のプラチナプログラムに参加されている皆さまにお送りしております。\n' +
+'\n' +
+'\n' +
+'こんにちは。\n' +
+'“Shine A Light”運営事務局です。\n' +
+'\n' +
+'本日のプラチナグルコンについて\n' +
+'詳細のご案内です。\n' +
+'\n' +
+'本日【{{日程}}{{時間帯}}】に\n' +
+'プラチナグルコンがございます。\n' +
+'\n' +
+'\n' +
+'＝＝＝＝＝＝＝\n' +
+'\n' +
+'【グルコン参加URL（Zoom）】\n' +
+'\n' +
+'{{zoomリンク}}\n' +
+'\n' +
+'ミーティングID: {{ミーティングID}}\n' +
+'\n' +
+'＝＝＝＝＝＝＝\n' +
+'\n' +
+'\n' +
+'※グルコン動画は、後日アーカイブを送付いたします。\n' +
+'本日ご都合がつかない方は、アーカイブをご活用ください。\n' +
+'\n' +
+'\n' +
+'ご案内は以上です。\n' +
+'\n' +
+'ご不明な点等ある場合は\n' +
+'当メールの返信にてご連絡ください。\n' +
+'\n' +
+'\n' +
+'それでは、後ほどよろしくお願いいたします。\n' +
+'\n' +
+'\n' +
+SIGNATURE_],
+
+  ['アーカイブ',
+   '【重要】{{日程}}プラチナグルコンのアーカイブ動画です！',
+'※このメールは、"Shine A Light"のプラチナプログラムに参加されている皆さまにお送りしております。\n' +
+'\n' +
+'こんにちは。\n' +
+'Shine A Light 運営事務局です。\n' +
+'\n' +
+'{{日程}}に\n' +
+'開催しましたグルコンの動画を\n' +
+'お送りいたします。\n' +
+'\n' +
+'\n' +
+'参加できなかった方や\n' +
+'復習したい方は、\n' +
+'とても濃い内容になっておりますので\n' +
+'ご視聴くださいませ。\n' +
+'\n' +
+'\n' +
+'＝＝＝＝＝＝\n' +
+'\n' +
+'【プラチナグルコンのアーカイブです】\n' +
+'{{アーカイブ動画URL}}\n' +
+'\n' +
+'＝＝＝＝＝＝\n' +
+'\n' +
+'\n' +
+'【プラチナメンバー活動報告まとめ】\n' +
+'{{活動報告まとめURL}}\n' +
+'\n' +
+'プラチナメンバーの活動報告、質問をもとに\n' +
+'グルコンを進めております。\n' +
+'素晴らしい報告もいただいておりますので\n' +
+'ぜひ目を通してくださいませ。\n' +
+'\n' +
+'\n' +
+'\n' +
+'＝＝＝＝＝＝＝＝＝＝＝＝＝＝\n' +
+'プラチナグルコン日程\n' +
+'＝＝＝＝＝＝＝＝＝＝＝＝＝＝ \n' +
+'\n' +
+'{{今後の日程}}\n' +
+'\n' +
+'＝＝＝＝＝＝＝＝＝＝＝＝＝＝\n' +
+'今後のプラチナ合宿の予定\n' +
+'＝＝＝＝＝＝＝＝＝＝＝＝＝＝\n' +
+'\n' +
+'{{合宿予定}}\n' +
+'\n' +
+'\n' +
+'ご案内は以上です。\n' +
+'\n' +
+'ご不明点のお問い合わせは\n' +
+'当メールの返信にてご連絡ください。\n' +
+'\n' +
+'\n' +
+SIGNATURE_],
+
+];
+
+
+// ══════════════════════════════════════════════════════════════
+// MailDraft.gs
+// ══════════════════════════════════════════════════════════════
+
+/**
+ * メール下書きの自動作成
+ *
+ * 日程シートの「メールセット」列の日付が今日になった朝に、
+ * 「3日前」「前日」「当日」の3通をGmailの【下書き】として作ります。
+ * 「アーカイブ」は、スケジュールに「アーカイブ動画URL」を入力すると
+ * 翌朝に作られます（メニューから手動でも作れます）。
+ *
+ * ★下書きは【このスクリプトを動かしているアカウント】のGmailに入ります。
+ *   shinealightonlineschool@gmail.com から送るなら、
+ *   そのアカウントでスクリプトを開いて実行してください。
+ *
+ * ★宛先は空のままです。送信予約のときに手動で入れてください。
+ */
+
+const MAIL_SHEET_NAME = 'メールテンプレート';
+
+/** 事前案内としてまとめて作る3通 */
+const PRE_EVENT_TIMINGS = ['3日前', '前日', '当日'];
+
+// ─────────────────────────────────────────────────────────
+//  毎朝の判定
+// ─────────────────────────────────────────────────────────
+
+/**
+ * 今日が「メールセット」日のイベントがあれば下書きを作る。
+ * あわせて、アーカイブ動画URLが入っている回のアーカイブ下書きも作る。
+ * @return {Array<string>} 実行した内容（ログ用）
+ */
+function createDraftsIfDue_() {
+  const done = [];
+  if (!hasMailTemplates_()) {
+    logInfo_('メールテンプレートシートが無いため、下書き作成はスキップしました。');
+    return done;
+  }
+
+  const today = startOfDay_(new Date());
+
+  listTargetEvents_().forEach(function (event) {
+    const status = String(event.draftStatus || '');
+
+    // ── 事前案内3通（メールセット日に作成）──
+    const setDate = event.mailSetDate || addDays_(event.date, -CONFIG.OPEN_DAYS_BEFORE);
+    if (startOfDay_(setDate).getTime() === today.getTime() && status.indexOf('事前') < 0) {
+      const made = createPreEventDrafts_(event);
+      if (made.length) {
+        writeDraftStatus_(event, appendStatus_(status, '事前' + made.length + '通 '
+          + formatDate_(new Date(), 'M/d')));
+        done.push(formatDateJa_(event.date) + ' の事前案内を ' + made.length + '通 作成しました（'
+          + made.join(' / ') + '）');
+      }
+    }
+
+    // ── アーカイブ（動画URLが入ったら作成）──
+    if (event.archiveUrl && status.indexOf('アーカイブ') < 0
+        && startOfDay_(event.date).getTime() <= today.getTime()) {
+      const subject = createArchiveDraft_(event);
+      if (subject) {
+        writeDraftStatus_(event, appendStatus_(String(event.draftStatus || ''),
+          'アーカイブ ' + formatDate_(new Date(), 'M/d')));
+        done.push(formatDateJa_(event.date) + ' のアーカイブ下書きを作成しました');
+      }
+    }
+  });
+
+  done.forEach(function (d) { logInfo_(d); });
+  return done;
+}
+
+function appendStatus_(current, added) {
+  const base = String(current || '').trim();
+  return base ? base + ' / ' + added : added;
+}
+
+// ─────────────────────────────────────────────────────────
+//  下書きの作成
+// ─────────────────────────────────────────────────────────
+
+/** 「3日前」「前日」「当日」の下書きをまとめて作る */
+function createPreEventDrafts_(event) {
+  const templates = readMailTemplates_();
+  const made = [];
+  PRE_EVENT_TIMINGS.forEach(function (timing) {
+    const tpl = templates[timing];
+    if (!tpl) {
+      logInfo_('テンプレート「' + timing + '」が見つかりません。スキップします。');
+      return;
+    }
+    const subject = fillTemplate_(tpl.subject, event);
+    const body = fillTemplate_(tpl.body, event);
+    createGmailDraft_(subject, body);
+    made.push(timing);
+  });
+  return made;
+}
+
+/** アーカイブメールの下書きを作る */
+function createArchiveDraft_(event) {
+  const templates = readMailTemplates_();
+  const tpl = templates['アーカイブ'];
+  if (!tpl) {
+    logInfo_('テンプレート「アーカイブ」が見つかりません。');
+    return '';
+  }
+  const subject = fillTemplate_(tpl.subject, event);
+  const body = fillTemplate_(tpl.body, event);
+  createGmailDraft_(subject, body);
+  return subject;
+}
+
+/**
+ * Gmailに下書きを作る（宛先は空）。
+ * 空の宛先が拒否される環境では、自分のアドレスを入れて作り直します。
+ */
+function createGmailDraft_(subject, body) {
+  try {
+    GmailApp.createDraft('', subject, body);
+  } catch (e) {
+    logInfo_('宛先が空の下書きを作れなかったため、自分宛で作成します：' + e);
+    GmailApp.createDraft(Session.getEffectiveUser().getEmail(), subject, body);
+  }
+  logInfo_('下書きを作成しました：' + subject);
+}
+
+// ─────────────────────────────────────────────────────────
+//  差込
+// ─────────────────────────────────────────────────────────
+
+/** テンプレートの {{差込項目}} を埋める */
+function fillTemplate_(text, event) {
+  const settings = readSettings_();
+
+  function setting(names) {
+    for (var i = 0; i < names.length; i++) {
+      const v = settings[names[i]];
+      if (v !== undefined && String(v).trim() !== '') return String(v).trim();
+    }
+    return '';
+  }
+
+  const deadline = addDays_(event.date, -CONFIG.CLOSE_DAYS_BEFORE);
+  // 「ミーティングID: 893 4998 2545」のように項目名込みで入っていても大丈夫にする
+  const meetingId = setting(['プラチナグルコン ミーティングID', 'グルコン共通ミーティングID'])
+    .replace(/^ミーティングID\s*[:：]\s*/, '');
+
+  const map = {
+    '日程':            formatDateJaLong_(event.date),
+    '日程短':          formatDateJa_(event.date),
+    '提出期限':        formatDateJaLong_(deadline),
+    '提出期限短':      formatDateJaHalf_(deadline),
+    '時間帯':          formatTimeRangeJa_(event.startTime, event.endTime),
+    '開始時':          formatHourJa_(event.startTime),
+    'zoomリンク':      setting(['プラチナグルコン ZoomURL', 'グルコン共通ZoomURL']),
+    'ミーティングID':  meetingId,
+    '事前フォームURL': setting(['プラチナグルコン事前フォームURL', 'グルコン事前フォームURL', '事前フォームURL']),
+    '合宿予定':        setting(['合宿予定']),
+    '署名':            setting(['署名', '事務局差出人名']) || 'Shine A Light 運営事務局',
+    'アーカイブ動画URL': String(event.archiveUrl || ''),
+    '活動報告まとめURL': String(event.digestUrl || ''),
+    '今後の日程':      buildUpcomingSchedule_(event.date),
+  };
+
+  return String(text).replace(/\{\{([^}]+)\}\}/g, function (whole, key) {
+    const name = String(key).trim();
+    return (map[name] !== undefined) ? map[name] : whole;
+  });
+}
+
+/**
+ * 「今後の日程」を組み立てる。指定日より後の回を1行1件で並べ、
+ * 月が変わるところで1行あけます。
+ *
+ *   10月6日（火）10時〜11時
+ *   10月27日（火）21時〜22時
+ *
+ *   11月10日（火）10時〜11時
+ */
+function buildUpcomingSchedule_(afterDate) {
+  const base = afterDate ? startOfDay_(afterDate) : startOfDay_(new Date());
+  const lines = [];
+  var lastMonth = null;
+
+  listTargetEvents_().forEach(function (e) {
+    if (startOfDay_(e.date).getTime() <= base.getTime()) return;
+    const month = e.date.getMonth();
+    if (lastMonth !== null && month !== lastMonth) lines.push('');
+    lines.push(formatDateJaLong_(e.date) + formatTimeRangeJa_(e.startTime, e.endTime));
+    lastMonth = month;
+  });
+
+  return lines.join('\n');
+}
+
+// ─────────────────────────────────────────────────────────
+//  日付・時刻の表記
+// ─────────────────────────────────────────────────────────
+
+/** 「9月15日（火）」 */
+function formatDateJaLong_(d) {
+  const week = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
+  return formatDate_(d, 'M月d日') + '（' + week + '）';
+}
+
+/** 「9/14(月)」（半角かっこ） */
+function formatDateJaHalf_(d) {
+  const week = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
+  return formatDate_(d, 'M/d') + '(' + week + ')';
+}
+
+/** 「10:00」→「10時」／「9:30」→「9時30分」 */
+function formatHourJa_(time) {
+  const t = formatTime_(time);
+  const m = t.match(/^(\d{1,2})\s*[:：]\s*(\d{1,2})$/);
+  if (!m) return t;
+  const min = Number(m[2]);
+  return Number(m[1]) + '時' + (min ? min + '分' : '');
+}
+
+/** 「10時〜11時」 */
+function formatTimeRangeJa_(start, end) {
+  const s = formatHourJa_(start);
+  const e = formatHourJa_(end);
+  if (!s) return '';
+  return e ? s + '〜' + e : s;
+}
+
+// ─────────────────────────────────────────────────────────
+//  テンプレートシートの読み書き
+// ─────────────────────────────────────────────────────────
+
+function getMailSheet_() {
+  return openMaster_().getSheetByName(MAIL_SHEET_NAME);
+}
+
+function hasMailTemplates_() {
+  try { return getMailSheet_() !== null; } catch (e) { return false; }
+}
+
+/**
+ * メールテンプレートシートを読む
+ * @return {Object<string,{subject:string, body:string}>} タイミング名をキーにしたマップ
+ */
+function readMailTemplates_() {
+  const sheet = getMailSheet_();
+  if (!sheet) throw new Error('「' + MAIL_SHEET_NAME + '」シートがありません。'
+    + 'メニュー →「メールテンプレートを初期設定」を実行してください。');
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) throw new Error('「' + MAIL_SHEET_NAME + '」シートが空です。');
+
+  const values = sheet.getRange(1, 1, lastRow, 3).getValues();
+  const map = {};
+  for (var r = 1; r < values.length; r++) {
+    const timing = String(values[r][0] || '').trim();
+    if (!timing) continue;
+    map[timing] = {
+      subject: String(values[r][1] || ''),
+      body: String(values[r][2] || ''),
+    };
+  }
+  return map;
+}
+
+// ─────────────────────────────────────────────────────────
+//  初期設定
+// ─────────────────────────────────────────────────────────
+
+/**
+ * ★メール下書き機能の初期設定。
+ *
+ *   ・「メールテンプレート」シートを作り、雛形を書き込む
+ *   ・「基本設定」に足りない項目（事前フォームURL・合宿予定）を追加する
+ *   ・「スケジュール」に足りない列（アーカイブ動画URL・活動報告まとめURL・下書き作成）を追加する
+ *
+ * 何度実行しても、すでにあるものは書き換えません。
+ */
+function setupMailTemplates() {
+  const ss = openMaster_();
+  const added = [];
+
+  // ① メールテンプレートシート
+  var sheet = ss.getSheetByName(MAIL_SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(MAIL_SHEET_NAME);
+    sheet.getRange(1, 1, 1, 3).setValues([['タイミング', '件名', '本文']])
+         .setFontWeight('bold').setBackground('#D9D9D9');
+    sheet.getRange(2, 1, MAIL_TEMPLATES_.length, 3).setValues(MAIL_TEMPLATES_);
+    sheet.setColumnWidth(1, 90);
+    sheet.setColumnWidth(2, 420);
+    sheet.setColumnWidth(3, 700);
+    sheet.getRange(2, 1, MAIL_TEMPLATES_.length, 3)
+         .setVerticalAlignment('top').setWrap(true);
+    sheet.setFrozenRows(1);
+    added.push('「' + MAIL_SHEET_NAME + '」シートを作成し、雛形4通を書き込みました');
+  } else {
+    added.push('「' + MAIL_SHEET_NAME + '」シートはすでにあります（変更していません）');
+  }
+
+  // ② 基本設定に足りない項目
+  const settingsSheet = ss.getSheetByName(CONFIG.SETTINGS_SHEET_NAME);
+  if (settingsSheet) {
+    const existing = {};
+    const last = settingsSheet.getLastRow();
+    if (last > 0) {
+      settingsSheet.getRange(1, 1, last, 1).getValues().forEach(function (r) {
+        existing[String(r[0] || '').trim()] = true;
+      });
+    }
+    const wanted = [
+      ['プラチナグルコン事前フォームURL', '', '🟡 案内メールに載せる回答用URL'],
+      ['合宿予定', '＜合宿＞\n11月：東京　六本木付近\n12日（木）13日（金）',
+       '🟡 アーカイブメールの {{合宿予定}} に入ります'],
+    ];
+    wanted.forEach(function (row) {
+      if (existing[row[0]]) return;
+      settingsSheet.appendRow(row);
+      added.push('「基本設定」に『' + row[0] + '』を追加しました');
+    });
+  }
+
+  // ③ スケジュールに足りない列
+  const scheduleSheet = getScheduleSheet_();
+  const header = scheduleSheet.getRange(1, 1, 1, scheduleSheet.getLastColumn()).getValues()[0]
+    .map(function (h) { return String(h || '').trim(); });
+  ['アーカイブ動画URL', '活動報告まとめURL', '下書き作成'].forEach(function (name) {
+    if (header.indexOf(name) >= 0) return;
+    const col = scheduleSheet.getLastColumn() + 1;
+    scheduleSheet.getRange(1, col).setValue(name)
+                 .setFontWeight('bold').setBackground('#D9D9D9');
+    scheduleSheet.setColumnWidth(col, 260);
+    header.push(name);
+    added.push('「スケジュール」に『' + name + '』列を追加しました');
+  });
+
+  const out = '── 初期設定の結果 ──────────────────\n'
+    + added.map(function (a) { return '・' + a; }).join('\n')
+    + '\n\n【次にやること】\n'
+    + '・「基本設定」の『プラチナグルコン事前フォームURL』に、フォームの回答用URLを入れてください\n'
+    + '・「基本設定」の『合宿予定』を最新の内容に直してください\n'
+    + '・メニュー →「メール下書きを今すぐ作る」で中身を確認してください';
+  console.log(out);
+  return out;
+}
+
+// ─────────────────────────────────────────────────────────
+//  手動実行
+// ─────────────────────────────────────────────────────────
+
+/**
+ * 次回イベントの事前案内3通を、今すぐ下書きにする（動作確認用）。
+ * 「下書き作成」列の記録は更新しないので、本番の自動作成には影響しません。
+ */
+function manualCreatePreEventDrafts() {
+  const event = findNextEvent_();
+  if (!event) throw new Error('今日以降のイベントが日程シートに見つかりません。');
+  const made = createPreEventDrafts_(event);
+  const msg = formatDateJa_(event.date) + ' の下書きを ' + made.length + '通 作成しました（'
+    + made.join(' / ') + '）\n\nGmailの「下書き」フォルダを確認してください。\n宛先は空です。';
+  logInfo_(msg);
+  return msg;
+}
+
+/**
+ * 直近の「アーカイブ動画URLが入っている回」のアーカイブ下書きを今すぐ作る。
+ */
+function manualCreateArchiveDraft() {
+  const events = listTargetEvents_()
+    .filter(function (e) { return e.archiveUrl; });
+  if (events.length === 0) {
+    throw new Error('「アーカイブ動画URL」が入力された回がありません。\n'
+      + 'スケジュールシートに動画URLを入れてから実行してください。');
+  }
+  const event = events[events.length - 1];
+  const subject = createArchiveDraft_(event);
+  const msg = formatDateJa_(event.date) + ' のアーカイブ下書きを作成しました。\n\n'
+    + subject + '\n\nGmailの「下書き」フォルダを確認してください。';
+  logInfo_(msg);
+  return msg;
+}
+
+/** 差し込み結果をログで確認する（下書きは作りません） */
+function previewMailDrafts() {
+  const event = findNextEvent_();
+  if (!event) throw new Error('今日以降のイベントが日程シートに見つかりません。');
+  const templates = readMailTemplates_();
+  const lines = ['── 差し込みプレビュー（下書きは作っていません）──', ''];
+  PRE_EVENT_TIMINGS.concat(['アーカイブ']).forEach(function (timing) {
+    const tpl = templates[timing];
+    if (!tpl) { lines.push('【' + timing + '】テンプレートなし'); return; }
+    lines.push('════════ ' + timing + ' ════════');
+    lines.push('件名: ' + fillTemplate_(tpl.subject, event));
+    lines.push('');
+    lines.push(fillTemplate_(tpl.body, event));
+    lines.push('');
+  });
+  const out = lines.join('\n');
+  console.log(out);
+  return out;
+}
+
 
 // ══════════════════════════════════════════════════════════════
 // Main.gs
@@ -1402,6 +2176,15 @@ function catchUpToday() {
     done.push('フォームを開きました（' + formatDateJa_(openTarget.date) + ' のグルコン向け）');
   }
   ensureFormStateForToday_();
+
+  // ①-2 メール下書き
+  try {
+    const drafts = createDraftsIfDue_();
+    drafts.forEach(function (d) { done.push(d); });
+    if (drafts.length > 0) notifyDrafts_(drafts);
+  } catch (e) {
+    done.push('⚠ メール下書きの作成でエラー：' + ((e && e.message) ? e.message : e));
+  }
 
   // ② 今日が前日でなければここまで
   const event = findEventByDaysAhead_(CONFIG.CLOSE_DAYS_BEFORE);
@@ -1565,6 +2348,12 @@ function dailyPlanner() {
       scheduleExactJobsForToday_();
       clearDoneFlag_(closeTarget.date);
     }
+
+    // ④ メール下書きの作成（テンプレートシートがある場合のみ）
+    const drafts = createDraftsIfDue_();
+    if (drafts.length > 0) {
+      notifyDrafts_(drafts);
+    }
   } catch (err) {
     console.error(err);
     notifyError_('dailyPlanner', err);
@@ -1682,6 +2471,13 @@ function runDigest_(event, notify) {
   const built = buildSections_(responses);
   const docInfo = buildDigestDocument_(event, built);
 
+  // アーカイブメールで使えるよう、日程シートにURLを書き戻す（列がある場合のみ）
+  try {
+    writeDigestUrl_(event, docInfo.url);
+  } catch (e) {
+    console.warn('まとめURLの書き戻しに失敗しました: ' + e);
+  }
+
   logInfo_('ドキュメント：' + docInfo.title + ' → ' + docInfo.url);
   logInfo_('回答 ' + built.stats.responseCount + '件');
   built.stats.sections.forEach(function (sec) {
@@ -1776,6 +2572,11 @@ function onOpen() {
       .addItem('フォームを閉じる', 'menuCloseForm')
       .addItem('フォームの診断', 'menuDiagnoseForm')
       .addItem('フォームを登録（URLを貼る）', 'menuSetFormId')
+      .addSeparator()
+      .addItem('メールテンプレートを初期設定', 'menuSetupMailTemplates')
+      .addItem('メール下書きを今すぐ作る', 'menuCreateDrafts')
+      .addItem('アーカイブメールの下書きを作る', 'menuCreateArchiveDraft')
+      .addItem('差し込みプレビュー（下書きなし）', 'menuPreviewDrafts')
       .addSeparator()
       .addItem('Chatworkへの接続テスト', 'menuTestChatwork')
       .addItem('自動実行トリガーを設置', 'menuInstallTriggers')
@@ -1875,6 +2676,28 @@ function menuSetFormId() {
 
 function menuDiagnoseForm() {
   runFromMenu_('フォームの診断', function () { return diagnoseForm(); });
+}
+
+function menuSetupMailTemplates() {
+  runFromMenu_('メールテンプレートの初期設定', function () { return setupMailTemplates(); });
+}
+
+function menuCreateDrafts() {
+  const ui = SpreadsheetApp.getUi();
+  const answer = ui.alert('確認',
+    '次回イベントの「3日前」「前日」「当日」の下書きを、Gmailに3通作ります。\n'
+    + '（宛先は空です。送信はされません）\n\nよろしいですか？',
+    ui.ButtonSet.YES_NO);
+  if (answer !== ui.Button.YES) return;
+  runFromMenu_('メール下書きの作成', function () { return manualCreatePreEventDrafts(); });
+}
+
+function menuCreateArchiveDraft() {
+  runFromMenu_('アーカイブ下書きの作成', function () { return manualCreateArchiveDraft(); });
+}
+
+function menuPreviewDrafts() {
+  runFromMenu_('差し込みプレビュー', function () { return previewMailDrafts(); });
 }
 
 function menuTestChatwork() {

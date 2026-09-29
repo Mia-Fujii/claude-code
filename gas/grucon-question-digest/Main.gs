@@ -61,6 +61,15 @@ function catchUpToday() {
   }
   ensureFormStateForToday_();
 
+  // ①-2 メール下書き
+  try {
+    const drafts = createDraftsIfDue_();
+    drafts.forEach(function (d) { done.push(d); });
+    if (drafts.length > 0) notifyDrafts_(drafts);
+  } catch (e) {
+    done.push('⚠ メール下書きの作成でエラー：' + ((e && e.message) ? e.message : e));
+  }
+
   // ② 今日が前日でなければここまで
   const event = findEventByDaysAhead_(CONFIG.CLOSE_DAYS_BEFORE);
   if (!event) {
@@ -223,6 +232,12 @@ function dailyPlanner() {
       scheduleExactJobsForToday_();
       clearDoneFlag_(closeTarget.date);
     }
+
+    // ④ メール下書きの作成（テンプレートシートがある場合のみ）
+    const drafts = createDraftsIfDue_();
+    if (drafts.length > 0) {
+      notifyDrafts_(drafts);
+    }
   } catch (err) {
     console.error(err);
     notifyError_('dailyPlanner', err);
@@ -339,6 +354,13 @@ function runDigest_(event, notify) {
   const responses = readResponsesInWindow_(w.start, w.end);
   const built = buildSections_(responses);
   const docInfo = buildDigestDocument_(event, built);
+
+  // アーカイブメールで使えるよう、日程シートにURLを書き戻す（列がある場合のみ）
+  try {
+    writeDigestUrl_(event, docInfo.url);
+  } catch (e) {
+    console.warn('まとめURLの書き戻しに失敗しました: ' + e);
+  }
 
   logInfo_('ドキュメント：' + docInfo.title + ' → ' + docInfo.url);
   logInfo_('回答 ' + built.stats.responseCount + '件');

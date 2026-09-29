@@ -73,6 +73,10 @@ function listTargetEvents_() {
   const iStart = header.indexOf(H.startTime);
   const iEnd = header.indexOf(H.endTime);
   const iOwner = header.indexOf(H.owner);
+  const iMailSet = header.indexOf(H.mailSet);
+  const iArchive = header.indexOf(H.archiveUrl);
+  const iDigest = header.indexOf(H.digestUrl);
+  const iStatus = header.indexOf(H.draftStatus);
 
   const target = getProfile_().eventName;
   const events = [];
@@ -90,6 +94,10 @@ function listTargetEvents_() {
       startTime: iStart >= 0 ? formatTime_(row[iStart]) : '',
       endTime: iEnd >= 0 ? formatTime_(row[iEnd]) : '',
       owner: iOwner >= 0 ? String(row[iOwner] || '').trim() : '',
+      mailSetDate: iMailSet >= 0 ? toDate_(row[iMailSet]) : null,
+      archiveUrl: iArchive >= 0 ? String(row[iArchive] || '').trim() : '',
+      digestUrl: iDigest >= 0 ? String(row[iDigest] || '').trim() : '',
+      draftStatus: iStatus >= 0 ? String(row[iStatus] || '').trim() : '',
       row: r + 1,
     });
   }
@@ -125,4 +133,36 @@ function getCollectionWindow_(eventDate) {
   const end = addDays_(eventDate, -CONFIG.CLOSE_DAYS_BEFORE);
   end.setHours(CONFIG.CLOSE_HOUR, CONFIG.CLOSE_MINUTE, 0, 0);
   return { start: start, end: end };
+}
+
+// ─────────────────────────────────────────────────────────
+//  日程シートへの書き戻し
+// ─────────────────────────────────────────────────────────
+
+/**
+ * 日程シートの指定した列に値を書き込む。
+ * その列が無いシート（列を足していない場合）では何もしません。
+ * @return {boolean} 書き込んだか
+ */
+function writeScheduleCell_(event, headerName, value) {
+  if (!event || !event.row) return false;
+  const sheet = getScheduleSheet_();
+  const header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0]
+    .map(function (h) { return String(h || '').trim(); });
+  const idx = header.indexOf(headerName);
+  if (idx < 0) return false;
+  sheet.getRange(event.row, idx + 1).setValue(value);
+  return true;
+}
+
+/** 「下書き作成」列に記録する */
+function writeDraftStatus_(event, value) {
+  return writeScheduleCell_(event, CONFIG.SCHEDULE_HEADERS.draftStatus, value);
+}
+
+/** 「活動報告まとめURL」列にドキュメントのURLを書き戻す */
+function writeDigestUrl_(event, url) {
+  const wrote = writeScheduleCell_(event, CONFIG.SCHEDULE_HEADERS.digestUrl, url);
+  if (wrote) logInfo_('日程シートの「' + CONFIG.SCHEDULE_HEADERS.digestUrl + '」に書き戻しました。');
+  return wrote;
 }

@@ -101,3 +101,20 @@ function notifyError_(context, err) {
     console.error('エラー通知自体に失敗しました: ' + e);
   }
 }
+
+/** メール下書きを作ったことをChatworkに知らせる */
+function notifyDrafts_(lines) {
+  try {
+    const settings = readSettings_();
+    const mention = String(settings['Chatwork メンション先'] || '').trim();
+    const message = (mention ? mention + '\n' : '')
+      + 'メールの下書きを作成しました。\n'
+      + 'Gmailの「下書き」を確認し、宛先を入れて送信予約をお願いします。\n'
+      + '\n[info][title]作成した下書き[/title]'
+      + lines.map(function (l) { return '・' + l; }).join('\n')
+      + '[/info]';
+    sendChatwork_(message);
+  } catch (e) {
+    console.warn('下書き通知の送信に失敗しました: ' + e);
+  }
+}

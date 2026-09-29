@@ -22,6 +22,11 @@ function onOpen() {
       .addItem('フォームの診断', 'menuDiagnoseForm')
       .addItem('フォームを登録（URLを貼る）', 'menuSetFormId')
       .addSeparator()
+      .addItem('メールテンプレートを初期設定', 'menuSetupMailTemplates')
+      .addItem('メール下書きを今すぐ作る', 'menuCreateDrafts')
+      .addItem('アーカイブメールの下書きを作る', 'menuCreateArchiveDraft')
+      .addItem('差し込みプレビュー（下書きなし）', 'menuPreviewDrafts')
+      .addSeparator()
       .addItem('Chatworkへの接続テスト', 'menuTestChatwork')
       .addItem('自動実行トリガーを設置', 'menuInstallTriggers')
       .addItem('本日分の処理に追いつかせる', 'menuCatchUpToday')
@@ -120,6 +125,28 @@ function menuSetFormId() {
 
 function menuDiagnoseForm() {
   runFromMenu_('フォームの診断', function () { return diagnoseForm(); });
+}
+
+function menuSetupMailTemplates() {
+  runFromMenu_('メールテンプレートの初期設定', function () { return setupMailTemplates(); });
+}
+
+function menuCreateDrafts() {
+  const ui = SpreadsheetApp.getUi();
+  const answer = ui.alert('確認',
+    '次回イベントの「3日前」「前日」「当日」の下書きを、Gmailに3通作ります。\n'
+    + '（宛先は空です。送信はされません）\n\nよろしいですか？',
+    ui.ButtonSet.YES_NO);
+  if (answer !== ui.Button.YES) return;
+  runFromMenu_('メール下書きの作成', function () { return manualCreatePreEventDrafts(); });
+}
+
+function menuCreateArchiveDraft() {
+  runFromMenu_('アーカイブ下書きの作成', function () { return manualCreateArchiveDraft(); });
+}
+
+function menuPreviewDrafts() {
+  runFromMenu_('差し込みプレビュー', function () { return previewMailDrafts(); });
 }
 
 function menuTestChatwork() {
