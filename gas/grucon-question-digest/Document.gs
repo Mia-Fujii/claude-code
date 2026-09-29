@@ -100,11 +100,16 @@ function buildDigestDocument_(event, built, titleOverride) {
     // 区切りが複数あるとき、中身が無い区切りは見出しごと省く
     if (sections.length > 1 && sec.result.groups.length === 0) return;
 
-    if (wroteSomething) appendBlanks_(body, D.BLANK_LINES_BETWEEN_SECTIONS);
+    if (wroteSomething) {
+      appendBlanks_(body, D.BLANK_LINES_BETWEEN_SECTIONS);
+      if (D.SECTION_DIVIDER) {
+        body.appendHorizontalRule();
+        appendBlank_(body);
+      }
+    }
 
     if (sec.heading) {
-      const h = appendLine_(body, sec.heading);
-      if (D.HEADING_BOLD) h.editAsText().setBold(true);
+      appendHeading_(body, sec.heading);
       appendBlank_(body);
     }
 
@@ -113,10 +118,12 @@ function buildDigestDocument_(event, built, titleOverride) {
 
       // ── お名前（少し大きく・太字・黄色背景） ──
       const namePara = body.appendParagraph(g.displayName);
+      applyHeadingLevel_(namePara, D.NAME_AS_HEADING ? D.NAME_HEADING_LEVEL : 'NORMAL');
       namePara.editAsText()
               .setFontFamily(D.FONT_FAMILY)
               .setFontSize(D.NAME_FONT_SIZE)
               .setBold(D.NAME_BOLD)
+              .setForegroundColor(D.NAME_COLOR)
               .setBackgroundColor(D.NAME_HIGHLIGHT);
 
       // ── 本文 ──
@@ -178,6 +185,32 @@ function applySharing_(fileId) {
   }
 }
 
+/**
+ * 区切りの見出しを追加する。
+ * Googleドキュメントの見出しスタイルにすることで、概要パネルに目次として出ます。
+ * 見出しスタイルは既定の書式を持つため、そのあとで書式を上書きしています。
+ */
+function appendHeading_(body, text) {
+  const D = CONFIG.DOC;
+  const p = body.appendParagraph(text);
+  applyHeadingLevel_(p, D.HEADING_LEVEL);
+  p.editAsText()
+   .setFontFamily(D.FONT_FAMILY)
+   .setFontSize(D.HEADING_FONT_SIZE)
+   .setBold(D.HEADING_BOLD)
+   .setForegroundColor(D.HEADING_COLOR)
+   .setBackgroundColor(null);
+  return p;
+}
+
+/** 段落に見出しレベルを設定する（'NORMAL' や未知の値なら本文扱い） */
+function applyHeadingLevel_(paragraph, level) {
+  const headings = DocumentApp.ParagraphHeading;
+  const target = (level && headings[level]) ? headings[level] : headings.NORMAL;
+  paragraph.setHeading(target);
+  return paragraph;
+}
+
 /** 空行を指定した数だけ追加 */
 function appendBlanks_(body, count) {
   const n = (typeof count === 'number' && count >= 0) ? count : 1;
@@ -187,6 +220,7 @@ function appendBlanks_(body, count) {
 /** 空行を1つ追加 */
 function appendBlank_(body) {
   const p = body.appendParagraph('');
+  applyHeadingLevel_(p, 'NORMAL');
   p.editAsText().setFontFamily(CONFIG.DOC.FONT_FAMILY).setFontSize(CONFIG.DOC.BODY_FONT_SIZE);
   return p;
 }
@@ -194,6 +228,7 @@ function appendBlank_(body) {
 /** 1行を本文書式で追加 */
 function appendLine_(body, line) {
   const p = body.appendParagraph(line);
+  applyHeadingLevel_(p, 'NORMAL');
   const t = p.editAsText();
   t.setFontFamily(CONFIG.DOC.FONT_FAMILY)
    .setFontSize(CONFIG.DOC.BODY_FONT_SIZE)

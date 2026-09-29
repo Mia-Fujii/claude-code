@@ -267,6 +267,11 @@ GASの定期トリガーは指定時刻から±15分ほどずれるため、締�
 | `DOC.BODY_FONT_SIZE` | `11` | 本文の文字サイズ |
 | `DOC.NAME_HIGHLIGHT` | `#FFE599` | お名前の背景色 |
 | `DOC.ADDENDUM_LABEL` | `追記：` | 2件目以降の見出し |
+| `DOC.HEADING_LEVEL` | `HEADING1` | 区切りの見出しスタイル。**概要パネルに目次として出ます** |
+| `DOC.HEADING_FONT_SIZE` | `16` | 区切りの見出しの文字サイズ |
+| `DOC.HEADING_COLOR` | `#D81B60` | 区切りの見出しの文字色（ピンク） |
+| `DOC.SECTION_DIVIDER` | `true` | 2つ目以降の区切りの手前に区切り線を入れる |
+| `DOC.NAME_AS_HEADING` | `false` | `true` にするとお名前も概要パネルに並びます（見た目は変わりません） |
 | `DOC.BLANK_LINES_BETWEEN_PEOPLE` | `2` | 次のお名前の手前に入れる空行の数 |
 | `DOC.BLANK_LINES_BEFORE_ADDENDUM` | `1` | 「追記：」の手前に入れる空行の数 |
 | `DOC.INCLUDE_NOTES` | `false` | 自動処理メモをドキュメントにも入れるか |

@@ -244,8 +244,34 @@ const CONFIG = {
     /** 名前の背景色（黄色） */
     NAME_HIGHLIGHT: '#FFE599',
     BODY_FONT_SIZE: 11,
-    /** 区切りの見出し（【活動報告】など）を太字にするか */
+    // ── 区切りの見出し（【活動報告】【質問】）──
+    /**
+     * 見出しスタイル。'HEADING1'〜'HEADING4' にすると
+     * Googleドキュメントの「概要（アウトライン）」パネルに目次として出ます。
+     * 'NORMAL' にすると、ただの太字テキストになります。
+     */
+    HEADING_LEVEL: 'HEADING1',
+    HEADING_FONT_SIZE: 16,
+    /**
+     * 見出しの文字色（ピンク）。濃さの好みで差し替えてください。
+     *   '#D81B60' … 濃いめのピンク（既定）
+     *   '#E91E63' … やや明るいピンク
+     *   '#EC7CA8' … やさしいピンク
+     */
+    HEADING_COLOR: '#D81B60',
     HEADING_BOLD: true,
+    /** 2つ目以降の区切り（【質問】など）の手前に区切り線を入れるか */
+    SECTION_DIVIDER: true,
+
+    /**
+     * お名前も見出しにして、概要パネルに並べるか。
+     * true にすると見た目はそのまま（14pt・太字・黄色背景）で、
+     * 概要パネルに全員のお名前が目次として出ます。
+     */
+    NAME_AS_HEADING: false,
+    NAME_HEADING_LEVEL: 'HEADING2',
+    /** お名前の文字色 */
+    NAME_COLOR: '#000000',
     /** 2件目以降の質問の前に入れる見出し */
     ADDENDUM_LABEL: '追記：',
     /** 人と人のあいだに入れる空行の数（次のお名前の手前） */
@@ -901,11 +927,16 @@ function buildDigestDocument_(event, built, titleOverride) {
     // 区切りが複数あるとき、中身が無い区切りは見出しごと省く
     if (sections.length > 1 && sec.result.groups.length === 0) return;
 
-    if (wroteSomething) appendBlanks_(body, D.BLANK_LINES_BETWEEN_SECTIONS);
+    if (wroteSomething) {
+      appendBlanks_(body, D.BLANK_LINES_BETWEEN_SECTIONS);
+      if (D.SECTION_DIVIDER) {
+        body.appendHorizontalRule();
+        appendBlank_(body);
+      }
+    }
 
     if (sec.heading) {
-      const h = appendLine_(body, sec.heading);
-      if (D.HEADING_BOLD) h.editAsText().setBold(true);
+      appendHeading_(body, sec.heading);
       appendBlank_(body);
     }
 
@@ -914,10 +945,12 @@ function buildDigestDocument_(event, built, titleOverride) {
 
       // ── お名前（少し大きく・太字・黄色背景） ──
       const namePara = body.appendParagraph(g.displayName);
+      applyHeadingLevel_(namePara, D.NAME_AS_HEADING ? D.NAME_HEADING_LEVEL : 'NORMAL');
       namePara.editAsText()
               .setFontFamily(D.FONT_FAMILY)
               .setFontSize(D.NAME_FONT_SIZE)
               .setBold(D.NAME_BOLD)
+              .setForegroundColor(D.NAME_COLOR)
               .setBackgroundColor(D.NAME_HIGHLIGHT);
 
       // ── 本文 ──
@@ -979,6 +1012,32 @@ function applySharing_(fileId) {
   }
 }
 
+/**
+ * 区切りの見出しを追加する。
+ * Googleドキュメントの見出しスタイルにすることで、概要パネルに目次として出ます。
+ * 見出しスタイルは既定の書式を持つため、そのあとで書式を上書きしています。
+ */
+function appendHeading_(body, text) {
+  const D = CONFIG.DOC;
+  const p = body.appendParagraph(text);
+  applyHeadingLevel_(p, D.HEADING_LEVEL);
+  p.editAsText()
+   .setFontFamily(D.FONT_FAMILY)
+   .setFontSize(D.HEADING_FONT_SIZE)
+   .setBold(D.HEADING_BOLD)
+   .setForegroundColor(D.HEADING_COLOR)
+   .setBackgroundColor(null);
+  return p;
+}
+
+/** 段落に見出しレベルを設定する（'NORMAL' や未知の値なら本文扱い） */
+function applyHeadingLevel_(paragraph, level) {
+  const headings = DocumentApp.ParagraphHeading;
+  const target = (level && headings[level]) ? headings[level] : headings.NORMAL;
+  paragraph.setHeading(target);
+  return paragraph;
+}
+
 /** 空行を指定した数だけ追加 */
 function appendBlanks_(body, count) {
   const n = (typeof count === 'number' && count >= 0) ? count : 1;
@@ -988,6 +1047,7 @@ function appendBlanks_(body, count) {
 /** 空行を1つ追加 */
 function appendBlank_(body) {
   const p = body.appendParagraph('');
+  applyHeadingLevel_(p, 'NORMAL');
   p.editAsText().setFontFamily(CONFIG.DOC.FONT_FAMILY).setFontSize(CONFIG.DOC.BODY_FONT_SIZE);
   return p;
 }
@@ -995,6 +1055,7 @@ function appendBlank_(body) {
 /** 1行を本文書式で追加 */
 function appendLine_(body, line) {
   const p = body.appendParagraph(line);
+  applyHeadingLevel_(p, 'NORMAL');
   const t = p.editAsText();
   t.setFontFamily(CONFIG.DOC.FONT_FAMILY)
    .setFontSize(CONFIG.DOC.BODY_FONT_SIZE)
