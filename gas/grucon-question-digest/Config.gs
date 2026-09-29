@@ -320,3 +320,61 @@ function idFor_(propKey, profileKey) {
 function getMasterSpreadsheetId_()   { return idFor_('MASTER_SPREADSHEET_ID', 'masterSpreadsheetId'); }
 function getResponseSpreadsheetId_() { return idFor_('RESPONSE_SPREADSHEET_ID', 'responseSpreadsheetId'); }
 function getFormIdSetting_()         { return idFor_('FORM_ID', 'formId'); }
+
+// ─────────────────────────────────────────────────────────
+//  機能スイッチ（貼り付け先で自動的に決まります）
+// ─────────────────────────────────────────────────────────
+/*
+ * 同じコードを2か所に貼って両方でトリガーを設置すると、
+ * 同じ処理が二重に走ってしまいます。そこで、
+ * 「どのスプレッドシートに貼られているか」で担当を分けます。
+ *
+ *   回答スプレッドシート → 質問まとめ＋フォーム開閉
+ *   日程スプレッドシート → メール下書き
+ *
+ * どちらも動かしたい場合は、スクリプトプロパティ
+ *   FEATURES = both     （両方）
+ *   FEATURES = digest   （質問まとめのみ）
+ *   FEATURES = mail     （メール下書きのみ）
+ * で上書きできます。
+ */
+
+var FEATURES_CACHE_ = null;
+
+function getFeatures_() {
+  if (FEATURES_CACHE_) return FEATURES_CACHE_;
+
+  const forced = String(
+    PropertiesService.getScriptProperties().getProperty('FEATURES') || ''
+  ).trim().toLowerCase();
+  if (forced === 'both')   { FEATURES_CACHE_ = { digest: true,  mail: true,  reason: '設定（FEATURES=both）' }; return FEATURES_CACHE_; }
+  if (forced === 'digest') { FEATURES_CACHE_ = { digest: true,  mail: false, reason: '設定（FEATURES=digest）' }; return FEATURES_CACHE_; }
+  if (forced === 'mail')   { FEATURES_CACHE_ = { digest: false, mail: true,  reason: '設定（FEATURES=mail）' }; return FEATURES_CACHE_; }
+
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (ss) {
+      const id = ss.getId();
+      if (id === getResponseSpreadsheetId_()) {
+        FEATURES_CACHE_ = { digest: true, mail: false, reason: '回答シートに貼られているため' };
+        return FEATURES_CACHE_;
+      }
+      if (id === getMasterSpreadsheetId_()) {
+        FEATURES_CACHE_ = { digest: false, mail: true, reason: '日程シートに貼られているため' };
+        return FEATURES_CACHE_;
+      }
+    }
+  } catch (e) { /* noop */ }
+
+  FEATURES_CACHE_ = { digest: true, mail: true, reason: '判別できないため両方' };
+  return FEATURES_CACHE_;
+}
+
+/** 機能の説明（設定状況の表示用） */
+function describeFeatures_() {
+  const f = getFeatures_();
+  const on = [];
+  if (f.digest) on.push('質問まとめ＋フォーム開閉');
+  if (f.mail) on.push('メール下書き');
+  return on.join(' ＋ ') + '（' + f.reason + '）';
+}

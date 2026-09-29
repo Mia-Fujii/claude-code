@@ -53,24 +53,34 @@ function setupInstallTriggers() {
  */
 function catchUpToday() {
   const done = [];
+  const features = getFeatures_();
 
-  // ① フォームのオープン（5日前）＋受付期間中の開けっ放し確認
+  // ① メール下書き
+  if (features.mail) {
+    try {
+      const drafts = createDraftsIfDue_();
+      drafts.forEach(function (d) { done.push(d); });
+      if (drafts.length > 0) notifyDrafts_(drafts);
+      if (drafts.length === 0) done.push('今日は下書きを作る日ではありません。');
+    } catch (e) {
+      done.push('⚠ メール下書きの作成でエラー：' + ((e && e.message) ? e.message : e));
+    }
+  }
+
+  if (!features.digest) {
+    const outMailOnly = done.join('\n');
+    logInfo_(outMailOnly);
+    return outMailOnly;
+  }
+
+  // ② フォームのオープン（5日前）＋受付期間中の開けっ放し確認
   const openTarget = findEventByDaysAhead_(CONFIG.OPEN_DAYS_BEFORE);
   if (openTarget && setFormAcceptingIfAvailable_(true)) {
-    done.push('フォームを開きました（' + formatDateJa_(openTarget.date) + ' のグルコン向け）');
+    done.push('フォームを開きました（' + formatDateJa_(openTarget.date) + ' に向けて）');
   }
   ensureFormStateForToday_();
 
-  // ①-2 メール下書き
-  try {
-    const drafts = createDraftsIfDue_();
-    drafts.forEach(function (d) { done.push(d); });
-    if (drafts.length > 0) notifyDrafts_(drafts);
-  } catch (e) {
-    done.push('⚠ メール下書きの作成でエラー：' + ((e && e.message) ? e.message : e));
-  }
-
-  // ② 今日が前日でなければここまで
+  // ③ 今日が前日でなければここまで
   const event = findEventByDaysAhead_(CONFIG.CLOSE_DAYS_BEFORE);
   if (!event) {
     done.push('今日は前日ではないため、締切・まとめの処理はありません。');
@@ -126,6 +136,7 @@ function showStatus() {
   const profile = getProfile_();
   lines.push('── 設定状況 ──────────────────────────');
   lines.push('対象イベント          : ' + profile.label);
+  lines.push('この スクリプトの担当  : ' + describeFeatures_());
   lines.push('　日程シートの内容列  : 「' + profile.eventName + '」と完全一致する行');
   lines.push('　保存フォルダ名      : ' + profile.folderName);
   if (profile.folder && profile.folder.mode === 'year') {
@@ -224,28 +235,34 @@ function showStatus() {
 /** 毎日 6:00 に実行される司令塔 */
 function dailyPlanner() {
   try {
-    // ① フォームのオープン（5日前）
-    const openTarget = findEventByDaysAhead_(CONFIG.OPEN_DAYS_BEFORE);
-    if (openTarget) {
-      if (setFormAcceptingIfAvailable_(true)) {
-        logInfo_('【オープン】' + formatDateJa_(openTarget.date) + ' のグルコンに向けてフォームを開きました。');
+    const features = getFeatures_();
+
+    if (features.digest) {
+      // ① フォームのオープン（5日前）
+      const openTarget = findEventByDaysAhead_(CONFIG.OPEN_DAYS_BEFORE);
+      if (openTarget) {
+        if (setFormAcceptingIfAvailable_(true)) {
+          logInfo_('【オープン】' + formatDateJa_(openTarget.date) + ' に向けてフォームを開きました。');
+        }
+      }
+
+      // ② 受付期間中なのに閉じていたら開け直す（取りこぼし防止）
+      ensureFormStateForToday_();
+
+      // ③ 今日が前日なら、13:00 と 13:30 の単発トリガーを仕込む
+      const closeTarget = findEventByDaysAhead_(CONFIG.CLOSE_DAYS_BEFORE);
+      if (closeTarget) {
+        scheduleExactJobsForToday_();
+        clearDoneFlag_(closeTarget.date);
       }
     }
 
-    // ② 受付期間中なのに閉じていたら開け直す（取りこぼし防止）
-    ensureFormStateForToday_();
-
-    // ③ 今日が前日なら、13:00 と 13:30 の単発トリガーを仕込む
-    const closeTarget = findEventByDaysAhead_(CONFIG.CLOSE_DAYS_BEFORE);
-    if (closeTarget) {
-      scheduleExactJobsForToday_();
-      clearDoneFlag_(closeTarget.date);
-    }
-
-    // ④ メール下書きの作成（テンプレートシートがある場合のみ）
-    const drafts = createDraftsIfDue_();
-    if (drafts.length > 0) {
-      notifyDrafts_(drafts);
+    // ④ メール下書きの作成
+    if (features.mail) {
+      const drafts = createDraftsIfDue_();
+      if (drafts.length > 0) {
+        notifyDrafts_(drafts);
+      }
     }
   } catch (err) {
     console.error(err);
@@ -283,6 +300,7 @@ function removeOneShotTriggers_() {
 /** 13:00 ちょうどに走る：フォームを閉じる */
 function closeFormNow() {
   try {
+    if (!getFeatures_().digest) return;
     const event = findEventByDaysAhead_(CONFIG.CLOSE_DAYS_BEFORE);
     if (!event) {
       logInfo_('今日は前日ではないため、締切処理をスキップしました。');
@@ -299,6 +317,7 @@ function closeFormNow() {
 /** 13:30 ちょうどに走る：ドキュメント作成 → Chatwork送信 */
 function buildAndNotifyNow() {
   try {
+    if (!getFeatures_().digest) return;
     const event = findEventByDaysAhead_(CONFIG.CLOSE_DAYS_BEFORE);
     if (!event) {
       logInfo_('今日は前日ではないため、質問まとめをスキップしました。');
@@ -315,6 +334,7 @@ function buildAndNotifyNow() {
 /** 毎日 15:00：13:00/13:30 の処理が落ちていた場合の救済 */
 function dailySafetyNet() {
   try {
+    if (!getFeatures_().digest) return;
     const event = findEventByDaysAhead_(CONFIG.CLOSE_DAYS_BEFORE);
     if (!event) return;
 
