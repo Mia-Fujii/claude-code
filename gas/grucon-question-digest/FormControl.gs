@@ -10,31 +10,21 @@
  * 対象のフォームを取得する。見つからなければ null を返す。
  */
 function getFormOrNull_() {
-  // ① スクリプトプロパティ／CONFIG のIDがあればそれを使う
-  const id = cfg_('FORM_ID');
+  // ① スクリプトプロパティ／プロファイル／CONFIG のIDを使う
+  const id = getFormIdSetting_();
   if (id) {
     try {
       return FormApp.openById(id);
     } catch (e) {
-      console.warn('FORM_ID でフォームを開けませんでした: ' + e);
+      console.warn('設定されたフォームIDで開けませんでした: ' + e);
     }
   }
 
-  // ② プロファイルに登録されたIDを使う
-  try {
-    const profileFormId = getProfile_().formId;
-    if (profileFormId) {
-      return FormApp.openById(profileFormId);
-    }
-  } catch (e) {
-    console.warn('プロファイルのフォームIDで開けませんでした: ' + e);
-  }
-
-  // ③ 回答スプレッドシートに紐づいているフォームを自動検出する
+  // ② 回答スプレッドシートに紐づいているフォームを自動検出する
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     if (!ss) {
-      const responseId = cfg_('RESPONSE_SPREADSHEET_ID');
+      const responseId = getResponseSpreadsheetId_();
       if (responseId) ss = SpreadsheetApp.openById(responseId);
     }
     if (ss) {

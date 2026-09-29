@@ -43,7 +43,7 @@ function sendChatwork_(message) {
 /**
  * 質問まとめの通知メッセージを組み立てる
  */
-function buildNotificationMessage_(event, result, docInfo) {
+function buildNotificationMessage_(event, built, docInfo) {
   const settings = readSettings_();
   const mention = String(settings['Chatwork メンション先'] || '').trim();
 
@@ -53,29 +53,32 @@ function buildNotificationMessage_(event, result, docInfo) {
   if (event && event.owner) lines.push('担当：' + event.owner);
   if (lines.length > 0) lines.push('');
 
-  lines.push(docInfo.title + 'の質問をまとめました。');
+  const template = getProfile_().notifyTemplate || '{title}の質問をまとめました。';
+  lines.push(template.replace('{title}', docInfo.title));
   lines.push('ご確認お願いいたします！');
   lines.push(docInfo.url);
 
   // ── 補足 ──────────────────────────────────────────────
   const notes = [];
-  const s = result.stats;
-  notes.push('回答 ' + s.responseCount + '件 ／ 質問者 ' + s.personCount
-    + '名 ／ 掲載 ' + s.questionCount + '件'
-    + (s.duplicateCount > 0 ? '（重複 ' + s.duplicateCount + '件を除外）' : ''));
+  const s = built.stats;
+  notes.push('回答 ' + s.responseCount + '件');
+  s.sections.forEach(function (sec) {
+    notes.push('　' + sec.label + '：' + sec.personCount + '名 ／ 掲載 ' + sec.questionCount + '件'
+      + (sec.duplicateCount > 0 ? '（重複 ' + sec.duplicateCount + '件を除外）' : ''));
+  });
   notes.push('保存先：' + docInfo.path);
   if (docInfo.sharing) notes.push('共有　：' + docInfo.sharing.label);
 
-  if (result.notes.length > 0) {
+  if (built.notes.length > 0) {
     notes.push('');
     notes.push('■ 自動処理の補足');
-    result.notes.forEach(function (n) { notes.push('・' + n); });
+    built.notes.forEach(function (n) { notes.push('・' + n); });
   }
 
   if (docInfo.createdFolders.length > 0) {
     notes.push('');
     notes.push('※ フォルダを新規作成しました：' + docInfo.createdFolders.join(' / '));
-    notes.push('　 期の設定が正しいかご確認ください（「基本設定」B2 ＝ ' + docInfo.term + '）');
+    notes.push('　 保存先が正しいかご確認ください');
   }
 
   lines.push('');

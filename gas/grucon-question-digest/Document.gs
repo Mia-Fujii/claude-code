@@ -13,25 +13,44 @@ function getOrCreateFolder_(parent, name, createdLog) {
   return created;
 }
 
-/** 保存先フォルダ（Shine A Light講座 / {期} / グルコン）を用意する */
-function resolveTargetFolder_(createdLog) {
-  const rootId = cfg_('COURSE_ROOT_FOLDER_ID');
-  if (!rootId) throw new Error('COURSE_ROOT_FOLDER_ID が設定されていません。');
-  const root = DriveApp.getFolderById(rootId);
-  const term = getTermName_();                       // 例: "21期"
-  const folderName = getProfile_().folderName;
-  const termFolder = getOrCreateFolder_(root, term, createdLog);
-  const eventFolder = getOrCreateFolder_(termFolder, folderName, createdLog);
-  return {
-    folder: eventFolder,
-    path: root.getName() + ' / ' + term + ' / ' + folderName,
-    term: term,
-  };
+/**
+ * 保存先フォルダを用意する。
+ *   mode 'term' … ルート / {期} / {name}        例: Shine A Light講座 / 21期 / グルコン
+ *   mode 'year' … ルート / {開催年}年度 / {name} 例: 親フォルダ / 2026年度
+ * name が空なら、その1階層は掘りません。
+ */
+function resolveTargetFolder_(createdLog, eventDate) {
+  const profile = getProfile_();
+  const spec = profile.folder;
+  if (!spec || !spec.rootFolderId) {
+    throw new Error('保存先フォルダ（folder.rootFolderId）が設定されていません。');
+  }
+  const root = DriveApp.getFolderById(spec.rootFolderId);
+
+  var middle;
+  if (spec.mode === 'year') {
+    if (!eventDate) throw new Error('年フォルダを決めるための開催日がありません。');
+    // 1月1日〜12月31日で切り替わります
+    middle = formatDate_(eventDate, 'yyyy') + (spec.yearSuffix || '年度');
+  } else {
+    middle = getTermName_();          // 例: 21期
+  }
+
+  var folder = getOrCreateFolder_(root, middle, createdLog);
+  var path = root.getName() + ' / ' + middle;
+
+  if (spec.name) {
+    folder = getOrCreateFolder_(folder, spec.name, createdLog);
+    path += ' / ' + spec.name;
+  }
+
+  return { folder: folder, path: path, term: middle };
 }
 
-/** ドキュメントのファイル名（例: "8/20グルコン" / "8/21ビギナーグルコン"） */
+/** ドキュメントのファイル名（例: "9/15グルコン" / "2026/10/6活動報告＆質問"） */
 function buildDocTitle_(eventDate) {
-  return formatDate_(eventDate, CONFIG.DOC.TITLE_FORMAT) + getProfile_().titleSuffix;
+  const profile = getProfile_();
+  return formatDate_(eventDate, profile.titleFormat) + profile.titleSuffix;
 }
 
 /** 同名のドキュメントがあればそれを使い、無ければ作る */
@@ -49,15 +68,16 @@ function getOrCreateDoc_(folder, title) {
 }
 
 /**
- * 質問まとめドキュメントを作成（既存があれば中身を作り直す）
- * @param {Object} event  対象グルコン
- * @param {Object} result buildGroups_() の結果
+ * まとめドキュメントを作成（既存があれば中身を作り直す）
+ *
+ * @param {Object} event  対象イベント
+ * @param {Object} built  buildSections_() の結果
  * @param {string=} titleOverride ファイル名を指定したいとき（テスト用）
- * @return {{url: string, title: string, path: string, createdFolders: Array<string>, isNew: boolean}}
+ * @return {{url, title, path, term, createdFolders, isNew, sharing}}
  */
-function buildDigestDocument_(event, result, titleOverride) {
+function buildDigestDocument_(event, built, titleOverride) {
   const createdFolders = [];
-  const target = resolveTargetFolder_(createdFolders);
+  const target = resolveTargetFolder_(createdFolders, event.date);
   const title = titleOverride || buildDocTitle_(event.date);
 
   const res = getOrCreateDoc_(target.folder, title);
@@ -68,38 +88,55 @@ function buildDigestDocument_(event, result, titleOverride) {
   body.clear();
 
   const D = CONFIG.DOC;
+  const sections = built.sections;
+  const anyContent = sections.some(function (sec) { return sec.result.groups.length > 0; });
 
-  if (result.groups.length === 0) {
-    const p = body.appendParagraph('この期間に事前質問の回答はありませんでした。');
-    p.editAsText().setFontFamily(D.FONT_FAMILY).setFontSize(D.BODY_FONT_SIZE);
+  if (!anyContent) {
+    appendLine_(body, 'この期間に回答はありませんでした。');
   }
 
-  result.groups.forEach(function (g, gi) {
-    if (gi > 0) appendBlanks_(body, D.BLANK_LINES_BETWEEN_PEOPLE);
+  var wroteSomething = false;
+  sections.forEach(function (sec) {
+    // 区切りが複数あるとき、中身が無い区切りは見出しごと省く
+    if (sections.length > 1 && sec.result.groups.length === 0) return;
 
-    // ── お名前（少し大きく・太字・黄色背景） ──
-    const namePara = body.appendParagraph(g.displayName);
-    const nameText = namePara.editAsText();
-    nameText.setFontFamily(D.FONT_FAMILY)
-            .setFontSize(D.NAME_FONT_SIZE)
-            .setBold(D.NAME_BOLD)
-            .setBackgroundColor(D.NAME_HIGHLIGHT);
+    if (wroteSomething) appendBlanks_(body, D.BLANK_LINES_BETWEEN_SECTIONS);
 
-    // ── 質問本文 ──
-    g.entries.forEach(function (entry, ei) {
-      if (ei > 0) {
-        appendBlanks_(body, D.BLANK_LINES_BEFORE_ADDENDUM);
-        appendLine_(body, D.ADDENDUM_LABEL);
-      }
-      appendBodyText_(body, entry.question);
+    if (sec.heading) {
+      const h = appendLine_(body, sec.heading);
+      if (D.HEADING_BOLD) h.editAsText().setBold(true);
+      appendBlank_(body);
+    }
+
+    sec.result.groups.forEach(function (g, gi) {
+      if (gi > 0) appendBlanks_(body, D.BLANK_LINES_BETWEEN_PEOPLE);
+
+      // ── お名前（少し大きく・太字・黄色背景） ──
+      const namePara = body.appendParagraph(g.displayName);
+      namePara.editAsText()
+              .setFontFamily(D.FONT_FAMILY)
+              .setFontSize(D.NAME_FONT_SIZE)
+              .setBold(D.NAME_BOLD)
+              .setBackgroundColor(D.NAME_HIGHLIGHT);
+
+      // ── 本文 ──
+      g.entries.forEach(function (entry, ei) {
+        if (ei > 0) {
+          appendBlanks_(body, D.BLANK_LINES_BEFORE_ADDENDUM);
+          appendLine_(body, D.ADDENDUM_LABEL);
+        }
+        appendBodyText_(body, entry.question);
+      });
     });
+
+    wroteSomething = true;
   });
 
-  if (D.INCLUDE_NOTES && result.notes.length > 0) {
-    appendBlank_(body);
+  if (D.INCLUDE_NOTES && built.notes.length > 0) {
+    appendBlanks_(body, D.BLANK_LINES_BETWEEN_SECTIONS);
     appendLine_(body, '──────────');
     appendLine_(body, '■ 自動処理メモ');
-    result.notes.forEach(function (n) { appendLine_(body, '・' + n); });
+    built.notes.forEach(function (n) { appendLine_(body, '・' + n); });
   }
 
   // 先頭に残る空段落を掃除する

@@ -8,8 +8,8 @@ function getResponseSheet_() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   // ② スタンドアロン実行時は、設定またはプロファイルのIDを使う
   if (!ss) {
-    const id = cfg_('RESPONSE_SPREADSHEET_ID') || getProfile_().responseSpreadsheetId;
-    if (!id) throw new Error('回答スプレッドシートが特定できません。RESPONSE_SPREADSHEET_ID を設定してください。');
+    const id = getResponseSpreadsheetId_();
+    if (!id) throw new Error('回答スプレッドシートが特定できません。');
     ss = SpreadsheetApp.openById(id);
   }
   if (CONFIG.RESPONSE_SHEET_NAME) {
@@ -21,8 +21,10 @@ function getResponseSheet_() {
 }
 
 /**
- * 収録期間内の回答を読み込む
- * @return {Array<{timestamp: Date, email: string, name: string, question: string, row: number}>}
+ * 収録期間内の回答を読み込む。
+ * 回答本文はプロファイルの sections で指定された列ごとに取り出します。
+ * @return {Array<{timestamp: Date, email: string, name: string,
+ *                 answers: Object<string,string>, row: number}>}
  */
 function readResponsesInWindow_(windowStart, windowEnd) {
   const sheet = getResponseSheet_();
@@ -30,7 +32,15 @@ function readResponsesInWindow_(windowStart, windowEnd) {
   if (lastRow < 2) return [];
 
   const C = CONFIG.RESPONSE_COLUMNS;
-  const maxCol = Math.max(C.timestamp, C.email, C.name, C.question);
+  const sections = getProfile_().sections;
+  var maxCol = Math.max(C.timestamp, C.email, C.name);
+  sections.forEach(function (s) { maxCol = Math.max(maxCol, s.column); });
+
+  if (sheet.getLastColumn() < maxCol) {
+    throw new Error('回答シートの列が足りません（' + maxCol + '列必要）。'
+      + 'A:タイムスタンプ / B:メールアドレス / C:お名前 / D以降:回答 の並びを想定しています。');
+  }
+
   const values = sheet.getRange(2, 1, lastRow - 1, maxCol).getValues();
 
   const out = [];
@@ -40,19 +50,72 @@ function readResponsesInWindow_(windowStart, windowEnd) {
     if (!ts) continue;
     if (ts < windowStart || ts > windowEnd) continue;
 
-    const question = String(row[C.question - 1] || '').trim();
-    if (!question) continue;   // 質問が空の回答は載せない
+    const answers = {};
+    var hasAny = false;
+    sections.forEach(function (s) {
+      const text = String(row[s.column - 1] || '').trim();
+      answers[s.key] = text;
+      if (text) hasAny = true;
+    });
+    if (!hasAny) continue;   // すべて空欄の回答は載せない
 
     out.push({
       timestamp: ts,
       email: String(row[C.email - 1] || '').trim(),
       name: String(row[C.name - 1] || '').trim(),
-      question: question,
+      answers: answers,
       row: i + 2,
     });
   }
   out.sort(function (a, b) { return a.timestamp - b.timestamp; });
   return out;
+}
+
+/**
+ * 回答を区切り（活動報告／質問 など）ごとに集約する。
+ * 区切りが1つだけのイベントでも同じ形で扱えます。
+ *
+ * @return {{sections: Array, notes: Array<string>, stats: Object}}
+ */
+function buildSections_(responses) {
+  const sections = getProfile_().sections;
+  const multi = sections.length > 1;
+  const notes = [];
+  const built = [];
+
+  sections.forEach(function (sec) {
+    const subset = responses
+      .filter(function (r) { return String(r.answers[sec.key] || '').trim() !== ''; })
+      .map(function (r) {
+        return {
+          timestamp: r.timestamp,
+          email: r.email,
+          name: r.name,
+          question: String(r.answers[sec.key]).trim(),
+          row: r.row,
+        };
+      });
+    const result = buildGroups_(subset, sec.label);
+    // 同じ内容のメモ（名前の表記ゆれなど）が区切りをまたいで重複しないようにする
+    result.notes.forEach(function (n) {
+      if (notes.indexOf(n) < 0) notes.push(n);
+    });
+    built.push({ key: sec.key, label: sec.label, heading: sec.heading, result: result });
+  });
+
+  const stats = {
+    responseCount: responses.length,
+    sections: built.map(function (b) {
+      return {
+        label: b.label,
+        personCount: b.result.stats.personCount,
+        questionCount: b.result.stats.questionCount,
+        duplicateCount: b.result.stats.duplicateCount,
+      };
+    }),
+  };
+
+  return { sections: built, notes: notes, stats: stats };
 }
 
 /**
@@ -62,7 +125,8 @@ function readResponsesInWindow_(windowStart, windowEnd) {
  *   groups: [{displayName, email, entries: [{question, timestamp}], duplicates: n, aliasNames: []}]
  *   notes : 自動処理メモ（Chatworkに載せる補足）
  */
-function buildGroups_(responses) {
+function buildGroups_(responses, noun) {
+  const label = noun || '質問';
   const notes = [];
   const byKey = {};      // 正規化キー → グループ
   const order = [];      // 出現順
@@ -144,12 +208,12 @@ function buildGroups_(responses) {
   // ── メモを組み立てる ──
   groups.forEach(function (g) {
     if (g.duplicateCount > 0) {
-      notes.push(g.displayName + ' さん：まったく同じ内容の質問が '
+      notes.push(g.displayName + ' さん：まったく同じ内容の' + label + 'が '
         + (g.duplicateCount + 1) + ' 件送信されていたため、1件に統合しました'
         + (g.duplicateSamples.length ? '（「' + g.duplicateSamples[0] + '」）' : ''));
     }
     if (g.entries.length > 1) {
-      notes.push(g.displayName + ' さん：内容の異なる質問が ' + g.entries.length
+      notes.push(g.displayName + ' さん：内容の異なる' + label + 'が ' + g.entries.length
         + ' 件あったため、お名前の下にまとめました（2件目以降は「'
         + CONFIG.DOC.ADDENDUM_LABEL + '」として記載）');
     }

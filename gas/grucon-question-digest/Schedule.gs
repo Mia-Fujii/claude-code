@@ -4,8 +4,8 @@
 
 /** マスタスプレッドシートを開く */
 function openMaster_() {
-  const id = cfg_('MASTER_SPREADSHEET_ID');
-  if (!id) throw new Error('MASTER_SPREADSHEET_ID が設定されていません。');
+  const id = getMasterSpreadsheetId_();
+  if (!id) throw new Error('日程スプレッドシートのIDが設定されていません。');
   return SpreadsheetApp.openById(id);
 }
 
@@ -67,7 +67,7 @@ function listTargetEvents_() {
     if (idx < 0) throw new Error('日程シートに「' + name + '」列が見つかりません。');
     return idx;
   }
-  const iName = col(H.eventName);
+  const iName = header.indexOf(H.eventName);   // 無ければ -1（全行が対象）
   const iDate = col(H.date);
   const iShort = header.indexOf(H.dateShort);
   const iStart = header.indexOf(H.startTime);
@@ -79,7 +79,9 @@ function listTargetEvents_() {
 
   for (var r = 1; r < values.length; r++) {
     const row = values[r];
-    if (String(row[iName] || '').trim() !== target) continue;   // ★完全一致
+    // 対象イベント名が指定されていれば「内容」列と完全一致する行だけを拾う。
+    // 指定が無い（または「内容」列が無い）シートは、全行を対象とする。
+    if (target && iName >= 0 && String(row[iName] || '').trim() !== target) continue;
     const date = toDate_(row[iDate]);
     if (!date) continue;
     events.push({

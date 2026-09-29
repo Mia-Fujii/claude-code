@@ -119,13 +119,18 @@ function showStatus() {
   lines.push('対象イベント          : ' + profile.label);
   lines.push('　日程シートの内容列  : 「' + profile.eventName + '」と完全一致する行');
   lines.push('　保存フォルダ名      : ' + profile.folderName);
-  try {
-    lines.push('期（基本設定B2）      : ' + getTermName_());
-  } catch (e) {
-    lines.push('期（基本設定B2）      : ⚠ ' + e.message);
+  if (profile.folder && profile.folder.mode === 'year') {
+    lines.push('保存先の年フォルダ    : 開催年から自動（例 2026' + (profile.folder.yearSuffix || '年度') + '）');
+  } else {
+    try {
+      lines.push('期（基本設定B2）      : ' + getTermName_());
+    } catch (e) {
+      lines.push('期（基本設定B2）      : ⚠ ' + e.message);
+    }
   }
-  lines.push('マスタSS ID           : ' + (cfg_('MASTER_SPREADSHEET_ID') || '⚠ 未設定'));
-  lines.push('講座ルートフォルダID  : ' + (cfg_('COURSE_ROOT_FOLDER_ID') || '⚠ 未設定'));
+  lines.push('日程スプレッドシート  : ' + (getMasterSpreadsheetId_() || '⚠ 未設定'));
+  lines.push('保存先ルートフォルダ  : ' + ((profile.folder && profile.folder.rootFolderId) || '⚠ 未設定')
+    + '（' + (profile.folder && profile.folder.mode === 'year' ? '年フォルダ方式' : '期フォルダ方式') + '）');
   try {
     const form = getFormOrNull_();
     if (form) {
@@ -137,7 +142,10 @@ function showStatus() {
   } catch (e) {
     lines.push('フォーム              : ⚠ ' + e.message);
   }
-  lines.push('回答スプレッドシートID: ' + (cfg_('RESPONSE_SPREADSHEET_ID') || '⚠ 未設定'));
+  lines.push('回答スプレッドシート  : ' + (getResponseSpreadsheetId_() || '（開いているシート）'));
+  lines.push('回答の区切り          : ' + profile.sections.map(function (x) {
+    return x.label + '（' + String.fromCharCode(64 + x.column) + '列）';
+  }).join(' ／ '));
 
   const props = PropertiesService.getScriptProperties();
   lines.push('CHATWORK_TOKEN        : ' + (props.getProperty('CHATWORK_TOKEN') ? '設定済み' : '⚠ 未設定'));
@@ -152,15 +160,15 @@ function showStatus() {
   }
 
   try {
-    const rootId = cfg_('COURSE_ROOT_FOLDER_ID');
+    const rootId = profile.folder && profile.folder.rootFolderId;
     if (rootId) {
       const names = [];
       const it = DriveApp.getFolderById(rootId).getFolders();
       while (it.hasNext() && names.length < 30) names.push(it.next().getName());
-      lines.push('講座ルート直下フォルダ: ' + (names.length ? names.join(' / ') : '(なし)'));
+      lines.push('ルート直下のフォルダ  : ' + (names.length ? names.join(' / ') : '(なし)'));
     }
   } catch (e) {
-    lines.push('講座ルート直下フォルダ: ⚠ ' + e.message);
+    lines.push('ルート直下のフォルダ  : ⚠ ' + e.message);
   }
 
   try {
@@ -329,18 +337,21 @@ function runDigest_(event, notify) {
     + ' ／ 収録期間：' + formatDate_(w.start, 'M/d HH:mm') + ' 〜 ' + formatDate_(w.end, 'M/d HH:mm'));
 
   const responses = readResponsesInWindow_(w.start, w.end);
-  const result = buildGroups_(responses);
-  const docInfo = buildDigestDocument_(event, result);
+  const built = buildSections_(responses);
+  const docInfo = buildDigestDocument_(event, built);
 
   logInfo_('ドキュメント：' + docInfo.title + ' → ' + docInfo.url);
-  logInfo_('回答 ' + result.stats.responseCount + '件 ／ 質問者 ' + result.stats.personCount
-    + '名 ／ 掲載 ' + result.stats.questionCount + '件');
-  result.notes.forEach(function (n) { logInfo_('・' + n); });
+  logInfo_('回答 ' + built.stats.responseCount + '件');
+  built.stats.sections.forEach(function (sec) {
+    logInfo_('　' + sec.label + '：' + sec.personCount + '名 ／ 掲載 ' + sec.questionCount + '件'
+      + (sec.duplicateCount ? '（重複 ' + sec.duplicateCount + '件を除外）' : ''));
+  });
+  built.notes.forEach(function (n) { logInfo_('・' + n); });
 
   if (notify) {
-    sendChatwork_(buildNotificationMessage_(event, result, docInfo));
+    sendChatwork_(buildNotificationMessage_(event, built, docInfo));
   }
-  return { result: result, docInfo: docInfo };
+  return { result: built, docInfo: docInfo };
 }
 
 /** 指定日より後の最初のグルコンを返す */

@@ -8,24 +8,25 @@
 /**
  * ★いちばん最初に試す関数。
  *
- * フォームも回答データも無い状態で、サンプルの質問から
+ * フォームも回答データも無い状態で、サンプルの回答から
  * 実際のフォルダに「(サンプル)」付きのドキュメントを作ります。
  *
  * これで確認できること：
- *   ・「基本設定」B2 から期を正しく読めているか
- *   ・Shine A Light講座 / {期} / グルコン に保存できるか
+ *   ・保存先フォルダを正しく作れるか
  *   ・お名前の書式（大きさ・太字・黄色背景）が好みか
- *   ・同じ質問の統合、「追記：」のまとめ方が意図通りか
+ *   ・同じ内容の統合、「追記：」のまとめ方が意図通りか
  *   ・Chatworkに送られる文面が意図通りか
  */
 function demoBuildSampleDocument() {
-  const sampleDate = findNextEvent_() ? findNextEvent_().date : addDays_(new Date(), 3);
-  const event = {
+  const profile = getProfile_();
+  const next = findNextEvent_();
+  const sampleDate = next ? next.date : addDays_(new Date(), 3);
+  const event = next || {
     date: sampleDate,
     dateShort: formatDateJa_(sampleDate),
     startTime: '10:00',
     endTime: '11:00',
-    owner: '若菜先生',
+    owner: '',
   };
 
   const base = addDays_(sampleDate, -3);
@@ -34,69 +35,44 @@ function demoBuildSampleDocument() {
     d.setHours(h, m, 0, 0);
     return d;
   }
+  const keys = profile.sections.map(function (x) { return x.key; });
+  function answer(first, second) {
+    const a = {};
+    keys.forEach(function (k, i) { a[k] = i === 0 ? first : (second || ''); });
+    return a;
+  }
 
   // ── サンプル回答 ──────────────────────────────────────
   const responses = [
-    {
-      timestamp: at(0, 9, 12),
-      email: 'yamada@example.com',
-      name: '山田絵里香',
-      row: 2,
-      question: [
-        '質問①',
-        'まだYouTubeアップの課題は提出できてないのですが、今後の為にお聞きしたいです。',
-        '発表会の演奏動画をYouTubeに載せているお教室がありますが、それはスマホでの撮影なのか？ビデオカメラなのか？それとも他にいいものがあるのかを知りたいです。',
-        '',
-        '質問②',
-        'ホームページの添削をしていただきたいです。',
-        '若菜先生との個別コンサルのあと、ホームページをリニューアルしました。',
-        'お聞きしたいのは、その情報をどのような順番で載せたら良いのかを知りたいです。',
-        'ホームページURLはこちらです',
-        'https://pianonomori-musica.jimdofree.com/',
-        'どうぞよろしくお願いいたします。',
-      ].join('\n'),
-    },
-    {
-      // ↑と同一人物・別内容 → 「追記：」としてまとめられる
-      timestamp: at(1, 21, 4),
-      email: 'YAMADA@example.com ',   // 大文字・余分な空白もメアド照合で吸収されます
-      name: '山田絵里香',
-      row: 3,
-      question: [
-        '先程質問させていただきました、',
-        '質問②のホームページのヘッダーの（自分の）写真ですが、プロフィール写真と一緒のものと直せましたので、その部分は訂正させてください。',
-        'どうぞよろしくお願いいたします。',
-      ].join('\n'),
-    },
-    {
-      timestamp: at(1, 10, 30),
-      email: 'kawamoto@example.com',
-      name: '川元　弓子',
-      row: 4,
-      question: '今さらの疑問です。\nお恥ずかしいのですが、分かっていないため教えてください。',
-    },
-    {
-      // ↑とまったく同じ内容を誤送信 → 1件に統合される
-      timestamp: at(1, 10, 31),
-      email: 'kawamoto@example.com',
-      name: '川元 弓子',
-      row: 5,
-      question: '今さらの疑問です。\r\nお恥ずかしいのですが、分かっていないため教えてください。  ',
-    },
-    {
-      timestamp: at(2, 8, 0),
-      email: 'suzuki@example.com',
-      name: '鈴木美咲',
-      row: 6,
-      question: 'インスタの投稿頻度はどのくらいが良いでしょうか。',
-    },
+    { timestamp: at(0, 9, 12), email: 'yamada@example.com', name: '山田絵里香', row: 2,
+      answers: answer(
+        'プレゼントと肩書きが決まり、ライン公式への導線までは完了しました。\n'
+        + 'ここからは、インスタグラムの発信に力を入れていきたいと思います。',
+        '質問①\nホームページの添削をしていただきたいです。\n'
+        + 'https://pianonomori-musica.jimdofree.com/') },
+
+    // ↑と同一人物・別内容 → 「追記：」としてまとめられる
+    { timestamp: at(1, 21, 4), email: 'YAMADA@example.com ', name: '山田絵里香', row: 3,
+      answers: answer('体験レッスンのお申し込みが2件ありました。', '') },
+
+    { timestamp: at(1, 10, 30), email: 'kawamoto@example.com', name: '川元　弓子', row: 4,
+      answers: answer('継続講座の1回目が無事に終わりました。', '今さらの疑問です。\n教えてください。') },
+
+    // ↑とまったく同じ内容を誤送信 → 1件に統合される
+    { timestamp: at(1, 10, 31), email: 'kawamoto@example.com', name: '川元 弓子', row: 5,
+      answers: answer('継続講座の1回目が無事に終わりました。', '今さらの疑問です。\r\n教えてください。  ') },
+
+    // 1つ目の区切りだけ回答した人（質問なし）
+    { timestamp: at(2, 8, 0), email: 'suzuki@example.com', name: '鈴木美咲', row: 6,
+      answers: answer('インスタのフォロワーが1200名を超えました。', '') },
   ];
 
-  const result = buildGroups_(responses);
-  const docInfo = buildDigestDocument_(event, result, '(サンプル)' + buildDocTitle_(sampleDate));
+  const built = buildSections_(responses);
+  const docInfo = buildDigestDocument_(event, built, '(サンプル)' + buildDocTitle_(sampleDate));
 
   const lines = [];
   lines.push('── サンプル作成結果 ───────────────────');
+  lines.push('対象イベント : ' + profile.label);
   lines.push('ドキュメント : ' + docInfo.url);
   lines.push('ファイル名   : ' + docInfo.title);
   lines.push('保存先       : ' + docInfo.path);
@@ -105,11 +81,8 @@ function demoBuildSampleDocument() {
     lines.push('※フォルダを新規作成しました: ' + docInfo.createdFolders.join(' / '));
   }
   lines.push('');
-  lines.push('回答 ' + result.stats.responseCount + '件 → 質問者 ' + result.stats.personCount
-    + '名 / 掲載 ' + result.stats.questionCount + '件 / 重複除外 ' + result.stats.duplicateCount + '件');
-  lines.push('');
   lines.push('── Chatworkに送られる文面（今回は送信していません） ──');
-  lines.push(buildNotificationMessage_(event, result, docInfo));
+  lines.push(buildNotificationMessage_(event, built, docInfo));
   lines.push('────────────────────────────────────');
   lines.push('');
   lines.push('※確認できたら、作られた「(サンプル)…」のドキュメントは削除して構いません。');
@@ -168,17 +141,19 @@ function testChatworkConnection() {
  * この関数は【シートの全行】を対象にします。
  *
  * 使い方：
- *   ① スクリプトプロパティに RESPONSE_SPREADSHEET_ID を設定している場合
+ *   ① このスクリプトを回答シートに貼っている場合
  *        testBuildFromAllRows()
- *   ② まだ設定していない場合（URLでもIDでもOK）
+ *   ② 別のシートを指定したい場合（URLでもIDでもOK）
  *        testBuildFromAllRows('https://docs.google.com/spreadsheets/d/xxxx/edit')
  *
  * Chatworkには送信しません。ログに文面が出るだけです。
  */
 function testBuildFromAllRows(spreadsheetUrlOrId) {
+  const profile = getProfile_();
   const ss = spreadsheetUrlOrId
     ? SpreadsheetApp.openById(extractId_(spreadsheetUrlOrId))
-    : SpreadsheetApp.openById(cfg_('RESPONSE_SPREADSHEET_ID'));
+    : (SpreadsheetApp.getActiveSpreadsheet()
+       || SpreadsheetApp.openById(getResponseSpreadsheetId_()));
   const sheet = CONFIG.RESPONSE_SHEET_NAME
     ? ss.getSheetByName(CONFIG.RESPONSE_SHEET_NAME)
     : ss.getSheets()[0];
@@ -188,9 +163,11 @@ function testBuildFromAllRows(spreadsheetUrlOrId) {
   if (lastRow < 2) throw new Error('「' + ss.getName() + '」の「' + sheet.getName() + '」にデータがありません。');
 
   const C = CONFIG.RESPONSE_COLUMNS;
-  const maxCol = Math.max(C.timestamp, C.email, C.name, C.question);
+  var maxCol = Math.max(C.timestamp, C.email, C.name);
+  profile.sections.forEach(function (x) { maxCol = Math.max(maxCol, x.column); });
   if (sheet.getLastColumn() < maxCol) {
-    throw new Error('列が足りません。A:タイムスタンプ / B:メールアドレス / C:お名前 / D:ご質問 の並びを想定しています。');
+    throw new Error('列が足りません（' + maxCol + '列必要）。'
+      + 'A:タイムスタンプ / B:メールアドレス / C:お名前 / D以降:回答 を想定しています。');
   }
 
   const header = sheet.getRange(1, 1, 1, maxCol).getValues()[0];
@@ -199,10 +176,16 @@ function testBuildFromAllRows(spreadsheetUrlOrId) {
   const responses = [];
   const skipped = [];
   values.forEach(function (row, i) {
-    const question = String(row[C.question - 1] || '').trim();
-    if (!question) {
+    const answers = {};
+    var hasAny = false;
+    profile.sections.forEach(function (sec) {
+      const text = String(row[sec.column - 1] || '').trim();
+      answers[sec.key] = text;
+      if (text) hasAny = true;
+    });
+    if (!hasAny) {
       if (String(row[C.name - 1] || '').trim() || String(row[C.email - 1] || '').trim()) {
-        skipped.push((i + 2) + '行目（質問が空欄）');
+        skipped.push((i + 2) + '行目（回答が空欄）');
       }
       return;
     }
@@ -210,48 +193,56 @@ function testBuildFromAllRows(spreadsheetUrlOrId) {
       timestamp: toDate_(row[C.timestamp - 1]) || new Date(2000, 0, 1 + i),
       email: String(row[C.email - 1] || '').trim(),
       name: String(row[C.name - 1] || '').trim(),
-      question: question,
+      answers: answers,
       row: i + 2,
     });
   });
   responses.sort(function (a, b) { return a.timestamp - b.timestamp; });
 
   if (responses.length === 0) {
-    throw new Error('質問が入力された行が1件もありませんでした。D列（ご質問）を確認してください。');
+    throw new Error('回答が入力された行が1件もありませんでした。');
   }
 
   const next = findNextEvent_();
   const eventDate = next ? next.date : addDays_(new Date(), 3);
   const event = next || {
-    date: eventDate,
-    dateShort: formatDateJa_(eventDate),
-    startTime: '',
-    endTime: '',
-    owner: '',
+    date: eventDate, dateShort: formatDateJa_(eventDate),
+    startTime: '', endTime: '', owner: '',
   };
 
-  const result = buildGroups_(responses);
-  const docInfo = buildDigestDocument_(event, result, '(テスト)' + buildDocTitle_(eventDate));
+  const built = buildSections_(responses);
+  const docInfo = buildDigestDocument_(event, built, '(テスト)' + buildDocTitle_(eventDate));
 
   const lines = [];
   lines.push('── 読み込んだスプレッドシート ───────────────');
-  lines.push('ファイル : ' + ss.getName());
-  lines.push('シート   : ' + sheet.getName());
-  lines.push('列の対応 : A「' + header[C.timestamp - 1] + '」 / B「' + header[C.email - 1]
-    + '」 / C「' + header[C.name - 1] + '」 / D「' + header[C.question - 1] + '」');
-  lines.push('　★上の列名がタイムスタンプ／メールアドレス／お名前／ご質問 の順になっているか確認してください');
-  lines.push('読み込み : ' + responses.length + '行');
-  if (skipped.length) lines.push('スキップ : ' + skipped.join('、'));
+  lines.push('対象イベント : ' + profile.label);
+  lines.push('ファイル     : ' + ss.getName());
+  lines.push('シート       : ' + sheet.getName());
+  lines.push('列の対応     : A「' + header[C.timestamp - 1] + '」 / B「' + header[C.email - 1]
+    + '」 / C「' + header[C.name - 1] + '」');
+  profile.sections.forEach(function (sec) {
+    lines.push('　　' + String.fromCharCode(64 + sec.column) + '「'
+      + String(header[sec.column - 1] || '').replace(/[\r\n]+/g, ' ') + '」 → ' + sec.label);
+  });
+  lines.push('　★上の列名が想定どおりか確認してください');
+  lines.push('読み込み     : ' + responses.length + '行');
+  if (skipped.length) lines.push('スキップ     : ' + skipped.join('、'));
   lines.push('');
   lines.push('── 集約結果 ─────────────────────────────');
-  result.groups.forEach(function (g) {
-    lines.push('■ ' + g.displayName + '（質問 ' + g.entries.length + '件'
-      + (g.duplicateCount ? ' / 重複 ' + g.duplicateCount + '件を除外' : '') + '）');
-    g.entries.forEach(function (e, i) {
-      lines.push('   ' + (i > 0 ? '追記：' : '　　　') + summarize_(e.question, 50));
+  built.sections.forEach(function (sec) {
+    lines.push('【' + sec.label + '】');
+    if (sec.result.groups.length === 0) {
+      lines.push('　（該当なし）');
+    }
+    sec.result.groups.forEach(function (g) {
+      lines.push('■ ' + g.displayName + '（' + g.entries.length + '件'
+        + (g.duplicateCount ? ' / 重複 ' + g.duplicateCount + '件を除外' : '') + '）');
+      g.entries.forEach(function (e, i) {
+        lines.push('   ' + (i > 0 ? '追記：' : '　　　') + summarize_(e.question, 50));
+      });
     });
+    lines.push('');
   });
-  lines.push('');
   lines.push('── 作成したドキュメント ─────────────────');
   lines.push(docInfo.url);
   lines.push('ファイル名 : ' + docInfo.title);
@@ -262,7 +253,7 @@ function testBuildFromAllRows(spreadsheetUrlOrId) {
   }
   lines.push('');
   lines.push('── Chatworkに送られる文面（送信はしていません） ──');
-  lines.push(buildNotificationMessage_(event, result, docInfo));
+  lines.push(buildNotificationMessage_(event, built, docInfo));
   lines.push('────────────────────────────────────');
   lines.push('');
   lines.push('※この関数は日付の絞り込みを無視しています。');

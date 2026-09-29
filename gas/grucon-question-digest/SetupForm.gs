@@ -45,10 +45,14 @@ function setupCreateForm() {
     .setHelpText('フルネームでご記入ください')
     .setRequired(true);
 
-  form.addParagraphTextItem()
-    .setTitle(profile.questionItemTitle)
-    .setHelpText('困っていること、相談したいことを具体的にご記入ください。')
-    .setRequired(true);
+  // 区切り（活動報告／質問 など）の数だけ設問を作ります
+  profile.sections.forEach(function (sec, i) {
+    form.addParagraphTextItem()
+      .setTitle(i === 0 && profile.sections.length === 1
+        ? profile.questionItemTitle
+        : sec.label)
+      .setRequired(false);
+  });
 
   // ── 回答設定 ──
   form.setAllowResponseEdits(false);      // 締切後に内容が変わらないように
@@ -64,7 +68,7 @@ function setupCreateForm() {
 
   // ── フォルダへ移動（講座ルート直下） ──
   try {
-    const root = DriveApp.getFolderById(cfg_('COURSE_ROOT_FOLDER_ID'));
+    const root = DriveApp.getFolderById(profile.folder.rootFolderId);
     DriveApp.getFileById(form.getId()).moveTo(root);
     DriveApp.getFileById(ss.getId()).moveTo(root);
   } catch (e) {

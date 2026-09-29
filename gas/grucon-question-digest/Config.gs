@@ -1,45 +1,48 @@
 /**
- * グルコン事前質問まとめ 自動化
+ * 事前質問まとめ 自動化
  * ── 設定 ──
  *
- * 【ここを編集する】
- *   FORM_ID / RESPONSE_SPREADSHEET_ID は Googleフォーム作成後に埋めます。
- *   Chatwork のトークンとルームIDは、コードではなく
- *   「プロジェクトの設定 > スクリプト プロパティ」に保存してください。
+ * Chatwork のトークンは、コードではなく
+ * 「プロジェクトの設定 > スクリプト プロパティ」に保存してください。
  *
  * 必要なスクリプトプロパティ:
  *   CHATWORK_TOKEN    ... Chatwork APIトークン
  *   CHATWORK_ROOM_ID  ... 通知先ルームID（例: 444552021）
- *   FORM_ID           ... （任意）下のFORM_IDより優先されます
- *   RESPONSE_SPREADSHEET_ID ... （任意）同上
- *   MASTER_SPREADSHEET_ID   ... （任意）期が変わったらここを貼り替えるだけ
  */
 
 /**
  * ── 対象イベントの設定（プロファイル）──────────────────────
  *
- * このスクリプトは「グルコン」と「ビギナーグルコン」の両方で使えます。
- * 貼り付けた回答スプレッドシートのIDから、どちらの設定を使うかを
+ * このスクリプトは複数のイベントで使い回せます。
+ * 貼り付けた回答スプレッドシートのIDから、どの設定を使うかを
  * 自動で判別するので、コードを書き換える必要はありません。
+ *
+ * 【各項目の意味】
+ *   eventName    日程シートの「内容」列とこの文字列が完全一致する行を対象にする。
+ *                空文字なら「内容」列を見ずに全行を対象にする。
+ *   folder       ドキュメントの保存先。mode は 'term'（期フォルダ）か 'year'（年フォルダ）。
+ *   titleFormat  ファイル名の日付部分。titleSuffix がその後ろに付く。
+ *   sections     ドキュメントに出す区切り。回答シートの列ごとに1つ。
  */
 const PROFILES = {
 
   'グルコン': {
     label: 'グルコン',
-    /** 日程シートの「内容」列とこの文字列が完全一致する行を対象にします */
     eventName: 'グルコン',
-    /** 期フォルダの下に作るフォルダ名 */
-    folderName: 'グルコン',
-    /** ドキュメント名の末尾（例：9/14グルコン） */
-    titleSuffix: 'グルコン',
-    /** フォームの回答スプレッドシートのID */
+    masterSpreadsheetId: '1ViN_aCddOoVa3nnqwWlUM5D5LhLEk6YwTSYPNTlNY_I',
     responseSpreadsheetId: '1GsKR1ZzsFo56CRDYtdCnYpDCvqahdH3TcKoMfG-3nHE',
-    /**
-     * GoogleフォームのID（編集用URL .../forms/d/【ここ】/edit の部分）。
-     * 空にすると、回答スプレッドシートに紐づくフォームを自動検出します。
-     */
     formId: '',
-    /** フォーム作成用（setupCreateForm を使う場合のみ） */
+    folder: {
+      mode: 'term',                                        // Shine A Light講座 / {期} / グルコン
+      rootFolderId: '1G8svKr3uijCmSs_76-kDxZp5iUs4tUqc',
+      name: 'グルコン',
+    },
+    titleFormat: 'M/d',
+    titleSuffix: 'グルコン',                                  // 例: 9/15グルコン
+    notifyTemplate: '{title}の質問をまとめました。',             // Chatworkの1行目
+    sections: [
+      { key: 'question', label: '質問', heading: '', column: 4 },
+    ],
     formTitle: 'グルコン事前質問フォーム',
     questionItemTitle: 'ヴォンドラ高橋若菜へのご質問&ご相談',
   },
@@ -47,10 +50,20 @@ const PROFILES = {
   'ビギナーグルコン': {
     label: 'ビギナーグルコン',
     eventName: 'サポート講師ビギナーグルコン',
-    folderName: 'ビギナーグルコン',
-    titleSuffix: 'ビギナーグルコン',
+    masterSpreadsheetId: '1ViN_aCddOoVa3nnqwWlUM5D5LhLEk6YwTSYPNTlNY_I',
     responseSpreadsheetId: '1kkXhUm5t2Pkk4iqwOUlm478FWGFkPANxoarHfjTANiw',
     formId: '10jX_9SUmPuuOwW81G64qzhUN1-ShL3ykYiTOdc47qDQ',
+    folder: {
+      mode: 'term',
+      rootFolderId: '1G8svKr3uijCmSs_76-kDxZp5iUs4tUqc',
+      name: 'ビギナーグルコン',
+    },
+    titleFormat: 'M/d',
+    titleSuffix: 'ビギナーグルコン',
+    notifyTemplate: '{title}の質問をまとめました。',
+    sections: [
+      { key: 'question', label: '質問', heading: '', column: 4 },
+    ],
     formTitle: 'ビギナーグルコン事前質問フォーム',
     questionItemTitle: 'サポート講師へのご質問&ご相談',
   },
@@ -58,17 +71,47 @@ const PROFILES = {
   '課題作業会': {
     label: '課題作業会',
     eventName: '課題作業会',
-    /**
-     * ★保存先フォルダはビギナーグルコンと同じにしています。
-     *   課題作業会だけ別フォルダにしたい場合は '課題作業会' に変更してください
-     *   （そのフォルダが無ければ自動で作られます）。
-     */
-    folderName: 'ビギナーグルコン',
-    titleSuffix: '課題作業会',
+    masterSpreadsheetId: '1ViN_aCddOoVa3nnqwWlUM5D5LhLEk6YwTSYPNTlNY_I',
     responseSpreadsheetId: '1DpOFvFqiJ7cISCEqr8RAJeiSPbNW8Mc_O_xqgd0SU4Y',
     formId: '',
+    folder: {
+      mode: 'term',
+      rootFolderId: '1G8svKr3uijCmSs_76-kDxZp5iUs4tUqc',
+      /** ★ビギナーグルコンと同じフォルダに入れています。分けたいときは '課題作業会' に変更 */
+      name: 'ビギナーグルコン',
+    },
+    titleFormat: 'M/d',
+    titleSuffix: '課題作業会',
+    notifyTemplate: '{title}の質問をまとめました。',
+    sections: [
+      { key: 'question', label: '質問', heading: '', column: 4 },
+    ],
     formTitle: '課題作業会事前質問フォーム',
     questionItemTitle: '「作業会でこんな作業を一緒にしてほしい！〇〇に困っている！」という内容やご質問',
+  },
+
+  'プラチナグルコン': {
+    label: 'プラチナグルコン',
+    /** 日程シートに「内容」列が無く、全行がプラチナグルコンのため空にしています */
+    eventName: '',
+    masterSpreadsheetId: '1dtCc6zh77apMcLdI-g38NZx9wX2v_m-wZbVGepHsK-4',
+    responseSpreadsheetId: '1-9cBhWf_qIPNnzLxVCAoGJH-11uBcM785z6wpNtgO6M',
+    formId: '11mPH0vln2KW1nAhUEfc0cxSBe7CRfSRMXmO_eRUolmY',
+    folder: {
+      mode: 'year',                                        // 親フォルダ / 2026年度
+      rootFolderId: '1EG4mFU-A-k9uc3ML0RvJ4UeozSOuTWLx',
+      yearSuffix: '年度',                                   // 1/1〜12/31 で切り替わります
+      name: '',                                            // 年フォルダの直下に入れる
+    },
+    titleFormat: 'yyyy/M/d',
+    titleSuffix: '活動報告＆質問',                             // 例: 2026/10/6活動報告＆質問
+    notifyTemplate: '{title}をまとめました。',
+    sections: [
+      { key: 'report',   label: '活動報告', heading: '【活動報告】', column: 4 },
+      { key: 'question', label: '質問',     heading: '【質問】',     column: 5 },
+    ],
+    formTitle: 'プラチナグルコン質問受付フォーム',
+    questionItemTitle: 'ヴォンドラ高橋若菜へのご質問&ご相談',
   },
 
 };
@@ -79,7 +122,7 @@ const DEFAULT_PROFILE = 'グルコン';
 var PROFILE_CACHE_ = null;
 
 /**
- * このスクリプトがどちらのイベント用かを判定する。
+ * このスクリプトがどのイベント用かを判定する。
  * ① スクリプトプロパティ PROFILE が設定されていればそれを使う
  * ② 貼り付けられている回答スプレッドシートのIDから自動判別
  * ③ どちらでもなければ DEFAULT_PROFILE
@@ -116,45 +159,29 @@ function getProfile_() {
 
 const CONFIG = {
 
-  // ── ファイル・フォルダID ────────────────────────────────
-  /** 「Shine A Light_メール設定」スプレッドシート（期ごとのマスタ） */
-  MASTER_SPREADSHEET_ID: '1ViN_aCddOoVa3nnqwWlUM5D5LhLEk6YwTSYPNTlNY_I',
-
-  /** 「Shine A Light講座」フォルダ（この下に 21期 / グルコン と掘る） */
-  COURSE_ROOT_FOLDER_ID: '1G8svKr3uijCmSs_76-kDxZp5iUs4tUqc',
-
-  /** ★グルコン事前質問フォームのID（setupCreateForm() で自動設定されます） */
-  FORM_ID: '',
-
-  /**
-   * フォームの回答スプレッドシートのID。
-   * 通常は空のままでOKです（プロファイル、または今開いているシートを使います）。
-   */
-  RESPONSE_SPREADSHEET_ID: '',
-
   // ── マスタスプレッドシートのシート名 ───────────────────
   /** 日程シート（見つかった方を使います） */
   SCHEDULE_SHEET_NAMES: ['スケジュール', 'タスク管理'],
-  /** 基本設定シート（B列に「期」が入っている） */
+  /** 基本設定シート */
   SETTINGS_SHEET_NAME: '基本設定',
 
   /** 日程シートのヘッダー名（列の位置ではなく名前で探します） */
   SCHEDULE_HEADERS: {
-    eventName: '内容',
+    eventName: '内容',      // 無い場合は全行が対象になります
     date: '日程',
     dateShort: '日程短',
     startTime: '開始時間',
     endTime: '終了時間',
-    owner: '担当者',
+    owner: '担当者',        // 無い場合は「担当：」の行が出ません
   },
 
-  // ── フォームの回答スプレッドシートの列（1始まり） ───────
+  // ── 回答スプレッドシートの共通列（1始まり） ─────────────
   RESPONSE_SHEET_NAME: '',   // 空ならブックの最初のシート
   RESPONSE_COLUMNS: {
     timestamp: 1,  // A タイムスタンプ
     email:     2,  // B メールアドレス
     name:      3,  // C お名前
-    question:  4,  // D ヴォンドラ高橋若菜へのご質問&ご相談
+    // 回答本文の列は PROFILES の sections で指定します
   },
 
   // ── スケジュール ────────────────────────────────────────
@@ -179,26 +206,25 @@ const CONFIG = {
 
   // ── ドキュメントの書式 ─────────────────────────────────
   DOC: {
-    /** ファイル名の日付部分（末尾のイベント名はプロファイルから付きます） */
-    TITLE_FORMAT: 'M/d',
     FONT_FAMILY: 'Arial',
     NAME_FONT_SIZE: 14,
     NAME_BOLD: true,
-    /** 名前の背景色（黄色）。好みで '#FFFF00' や '#FCE5CD' などに変更可 */
+    /** 名前の背景色（黄色） */
     NAME_HIGHLIGHT: '#FFE599',
     BODY_FONT_SIZE: 11,
+    /** 区切りの見出し（【活動報告】など）を太字にするか */
+    HEADING_BOLD: true,
     /** 2件目以降の質問の前に入れる見出し */
     ADDENDUM_LABEL: '追記：',
     /** 人と人のあいだに入れる空行の数（次のお名前の手前） */
     BLANK_LINES_BETWEEN_PEOPLE: 2,
     /** 同じ人の「追記：」の手前に入れる空行の数 */
     BLANK_LINES_BEFORE_ADDENDUM: 1,
+    /** 区切り（【活動報告】→【質問】）のあいだに入れる空行の数 */
+    BLANK_LINES_BETWEEN_SECTIONS: 2,
     /** 自動処理メモをドキュメント末尾にも入れるか（既定は入れない＝Chatworkのみ） */
     INCLUDE_NOTES: false,
-    /**
-     * 作成したドキュメントを「リンクを知っている全員が閲覧可」にするか。
-     * false にすると、保存先フォルダの共有設定をそのまま引き継ぎます。
-     */
+    /** 作成したドキュメントを「リンクを知っている全員が閲覧可」にするか */
     SHARE_ANYONE_WITH_LINK: true,
   },
 
@@ -207,6 +233,11 @@ const CONFIG = {
   DRY_RUN: false,
 
   TIMEZONE: 'Asia/Tokyo',
+
+  // ── フォールバック（プロファイルに無い場合のみ使われます）──
+  MASTER_SPREADSHEET_ID: '',
+  RESPONSE_SPREADSHEET_ID: '',
+  FORM_ID: '',
 };
 
 /** スクリプトプロパティを優先して設定値を取得する */
@@ -215,3 +246,18 @@ function cfg_(key) {
   if (prop !== null && String(prop).trim() !== '') return String(prop).trim();
   return CONFIG[key] || '';
 }
+
+/** スクリプトプロパティ → プロファイル → CONFIG の順に探す */
+function idFor_(propKey, profileKey) {
+  const prop = PropertiesService.getScriptProperties().getProperty(propKey);
+  if (prop !== null && String(prop).trim() !== '') return String(prop).trim();
+  try {
+    const value = getProfile_()[profileKey];
+    if (value) return value;
+  } catch (e) { /* noop */ }
+  return CONFIG[propKey] || '';
+}
+
+function getMasterSpreadsheetId_()   { return idFor_('MASTER_SPREADSHEET_ID', 'masterSpreadsheetId'); }
+function getResponseSpreadsheetId_() { return idFor_('RESPONSE_SPREADSHEET_ID', 'responseSpreadsheetId'); }
+function getFormIdSetting_()         { return idFor_('FORM_ID', 'formId'); }
