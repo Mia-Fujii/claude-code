@@ -51,7 +51,7 @@ const IN_COLS = [
   ['DONE', '完了した手順'],
   ['PROCESSED_AT', '処理日時'],
   // ↓ 後から追加した列（既存のシートの並びを崩さないよう末尾に足す）
-  ['MEMO_DATE', '覚書の日付\n（空欄＝処理した日）'],
+  ['MEMO_DATE', '覚書の日付\n（空欄＝手続き期限の5日前）'],
 ];
 const IN = {};
 IN_COLS.forEach(function (c, i) { IN[c[0]] = i + 1; });
@@ -90,6 +90,7 @@ const DEFAULT_SETTINGS = [
   ['フォーム_個別なし_分割', 'https://forms.gle/NS2oxyeK9smeRmr77', '受講規約フォーム'],
   ['PayPalリンクの先頭', 'https://paypal.me/crozentokyo/', 'この後ろに「金額jpy」を付けてリンクを作ります'],
   ['振込口座', BANK_TEXT, 'メールの振込口座欄に入ります（セル内改行OK）'],
+  ['覚書の日付_期限の何日前', 5, '「覚書の日付」が空欄の時、手続き期限の何日前の日付にするか（過ぎていたら処理した日）'],
   ['通知_何日前', 14, '期日の何日前に通知するか'],
   ['通知_対象', '2分割のみ', '2分割のみ / 銀行振込すべて / すべて（いずれも2回目以降の支払いが対象）'],
   ['通知_時刻', 9, '毎朝何時ごろにチェックするか（0〜23）。変えたら「初期設定」を押し直す'],
@@ -170,6 +171,7 @@ function processChecked() {
     const ss = SpreadsheetApp.getActive();
     const sh = ss.getSheetByName(SHEET.INPUT);
     ensureInputHeaders_(sh);
+    setupSettingsSheet_(ss); // 後から増えた設定項目を足す
     ensureFoldersAndTemplates_();
     const s = getSettings_();
     const last = sh.getLastRow();
@@ -350,7 +352,7 @@ function buildContract_(row, s, priceRows) {
     bankAmount: bankAmount,
     link: method !== '併用' && method !== '銀行振込' ? (userLinks[0] || masterLink) : '',
     kobetsuStart: String(get('KOBETSU_START') || '').trim(),
-    memoDate: toDate_(get('MEMO_DATE')) || startOfDay_(new Date()),
+    memoDate: toDate_(get('MEMO_DATE')) || defaultMemoDate_(due1, s),
     oneTime: get('ONETIME') === true,
     countLabel: n === 1 ? '一括' : n + '分割',
     methodLabel: parts ? parts.map(function (p) { return p.method + man_(p.amount, ''); }).join('＋') : method,
@@ -958,7 +960,8 @@ function ensureInputHeaders_(sh) {
   ensureSize_(sh, 2, IN_COLS.length);
   const cur = sh.getRange(1, 1, 1, IN_COLS.length).getValues()[0];
   IN_COLS.forEach(function (c, i) {
-    if (cur[i] !== '') return;
+    // 覚書の日付の見出しは説明を変えたので、古い見出しなら書き換える
+    if (cur[i] !== '' && !(c[0] === 'MEMO_DATE' && cur[i] !== c[1] && /^覚書の日付/.test(cur[i]))) return;
     sh.getRange(1, i + 1).setValue(c[1]).setFontWeight('bold').setBackground('#fde9d9').setWrap(true);
     if (c[0] === 'MEMO_DATE') sh.getRange(2, i + 1, sh.getMaxRows() - 1, 1).setNumberFormat('yyyy/m/d');
   });
@@ -1541,6 +1544,14 @@ function toDate_(v) {
   if (Object.prototype.toString.call(v) === '[object Date]') return isNaN(v.getTime()) ? null : startOfDay_(v);
   const m = toHalfWidth_(v == null ? '' : v).trim().match(/^(\d{4})[\/\-年.](\d{1,2})[\/\-月.](\d{1,2})日?/);
   return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+}
+
+/** 覚書の日付の初期値：手続き期限の N 日前。それが今日より前なら今日 */
+function defaultMemoDate_(due1, s) {
+  const n = Number(s['覚書の日付_期限の何日前']);
+  const d = addDays_(due1, -(isNaN(n) || s['覚書の日付_期限の何日前'] === '' || s['覚書の日付_期限の何日前'] == null ? 5 : n));
+  const today = startOfDay_(new Date());
+  return d < today ? today : d;
 }
 
 /** 6月26日（金） */

@@ -154,11 +154,15 @@ test('更新で契約日が空欄：メンバーリストの契約満了日の�
   } finally { g.openTab_ = orig; }
 });
 
-test('覚書の日付：空欄なら今日、入力があればその日', () => {
-  const base = { KUBUN: '更新', KOBETSU: 'なし', NAME: 'x', EMAIL: 'a@b.jp', CONTRACT: D(2026, 11, 1), DUE1: D(2026, 10, 31), COUNT: 12, METHOD: 'スクエア', TOTAL: 552000 };
-  const today = new Date();
-  assert.strictEqual(fmt(g.buildContract_(row(base), S, []).memoDate), fmt(today));
-  assert.strictEqual(fmt(g.buildContract_(row({ ...base, MEMO_DATE: D(2026, 10, 26) }), S, []).memoDate), '2026/10/26');
+test('覚書の日付：入力優先／空欄は期限の5日前／過ぎていれば今日', () => {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const far = new Date(today.getFullYear() + 1, 9, 31);
+  const base = { KUBUN: '更新', KOBETSU: 'なし', NAME: 'x', EMAIL: 'a@b.jp', CONTRACT: new Date(far.getFullYear(), 10, 1), DUE1: far, COUNT: 12, METHOD: 'スクエア', TOTAL: 552000 };
+  assert.strictEqual(fmt(g.buildContract_(row(base), S, []).memoDate), `${far.getFullYear()}/10/26`);
+  assert.strictEqual(fmt(g.buildContract_(row(base), { ...S, '覚書の日付_期限の何日前': 7 }, []).memoDate), `${far.getFullYear()}/10/24`);
+  assert.strictEqual(fmt(g.buildContract_(row({ ...base, MEMO_DATE: D(2026, 10, 20) }), S, []).memoDate), '2026/10/20');
+  const soon = g.addDays_(today, 2);
+  assert.strictEqual(fmt(g.buildContract_(row({ ...base, DUE1: soon }), S, []).memoDate), fmt(today));
 });
 
 console.log(`\n${passed} tests passed`);
