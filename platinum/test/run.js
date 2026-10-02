@@ -321,4 +321,21 @@ test('メンバーリスト：更新は元の行を消して一番下へ、過�
   } finally { g.openTab_ = orig; }
 });
 
+test('支払予定に入れる回：1回目＋通知の対象の回だけ', () => {
+  const rowsFor = (mode, n, method) => {
+    const added = [];
+    const ss = { getSheetByName: () => ({ getLastRow: () => 1,
+      getRange: () => ({ setValues: (v) => added.push(...v), setNumberFormat: () => {}, insertCheckboxes: () => {} }) }) };
+    const c = { id: 'P', name: 'x', email: 'a@b', n, method, methodLabel: method, link: '',
+      schedule: Array.from({ length: n }, (_, i) => ({ no: i + 1, date: D(2026, 1 + i, 1), amount: 1 })) };
+    g.appendSchedule_(ss, c, { ...S, '通知_対象': mode });
+    return added.map((r) => r[4]);
+  };
+  assert.deepStrictEqual(rowsFor('2分割のみ', 12, 'スクエア'), [1]);
+  assert.deepStrictEqual(rowsFor('2分割のみ', 1, '銀行振込'), [1]);
+  assert.deepStrictEqual(rowsFor('2分割のみ', 2, 'PayPal'), [1, 2]);
+  assert.deepStrictEqual(rowsFor('銀行振込すべて', 3, '銀行振込'), [1, 2, 3]);
+  assert.deepStrictEqual(rowsFor('銀行振込すべて', 12, 'スクエア'), [1]);
+});
+
 console.log(`\n${passed} tests passed`);

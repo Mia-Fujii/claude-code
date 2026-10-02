@@ -721,9 +721,16 @@ function appendTaxSheet_(c, s) {
 
 /* ---------- このスプレッドシート内 ---------- */
 
+/**
+ * 支払予定：1回目と、期日の通知の対象になる回だけを入れる
+ * （すべての回の期日は「分割支払い」シートと覚書に入る）
+ */
 function appendSchedule_(ss, c, s) {
   const sh = ss.getSheetByName(SHEET.SCHEDULE);
-  const rows = c.schedule.map(function (p) {
+  const mode = String(s['通知_対象'] || '2分割のみ');
+  const rows = c.schedule.filter(function (p) {
+    return p.no === 1 || isNotifyTarget_(mode, c.n, c.methodLabel);
+  }).map(function (p) {
     let link = '';
     if (c.method === 'PayPal') link = paypalUrl_(s, p.amount);
     else if (c.method !== '銀行振込' && c.method !== '併用') link = c.link;
@@ -976,8 +983,7 @@ function dailyCheck() {
     data.forEach(function (r, i) {
       const due = toDate_(r[SCH['期日']]);
       if (!due || Number(r[SCH['回']]) < 2 || r[SCH['入金済']] === true || r[SCH['通知日']] !== '') return;
-      if (mode === '2分割のみ' && Number(r[SCH['支払回数']]) !== 2) return;
-      if (mode === '銀行振込すべて' && r[SCH['支払方法']] !== '銀行振込') return;
+      if (!isNotifyTarget_(mode, Number(r[SCH['支払回数']]), r[SCH['支払方法']])) return;
       const left = Math.round((startOfDay_(due) - today) / 86400000);
       if (left > days) return;
 
@@ -1017,6 +1023,14 @@ function dailyCheck() {
         : '通知が必要な支払いはありませんでした。'
     );
   } catch (err) { /* トリガー実行時 */ }
+}
+
+/** 2回目以降の期日を通知する契約か（設定「通知_対象」：2分割のみ／銀行振込すべて／すべて） */
+function isNotifyTarget_(mode, n, method) {
+  if (n < 2) return false;
+  if (mode === '2分割のみ') return n === 2;
+  if (mode === '銀行振込すべて') return method === '銀行振込';
+  return true;
 }
 
 function createReminderDraft_(r, s) {
