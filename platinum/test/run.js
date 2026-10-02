@@ -165,4 +165,10 @@ test('覚書の日付：入力優先／空欄は期限の5日前／過ぎてい�
   assert.strictEqual(fmt(g.buildContract_(row({ ...base, DUE1: soon }), S, []).memoDate), fmt(today));
 });
 
+test('更新の手続き期限：契約日の前日／過ぎていればエラー', () => {
+  const y = new Date().getFullYear() + 1;
+  assert.strictEqual(fmt(g.defaultRenewalDue_(D(y, 11, 1))), `${y}/10/31`);
+  assert.throws(() => g.defaultRenewalDue_(D(2020, 11, 1)), /2020\/10\/31）はもう過ぎています/);
+});
+
 console.log(`\n${passed} tests passed`);

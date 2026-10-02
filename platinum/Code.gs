@@ -32,8 +32,8 @@ const IN_COLS = [
   ['KOBETSU', '個別コンサル'],
   ['NAME', '氏名'],
   ['EMAIL', 'メールアドレス'],
-  ['CONTRACT', '契約日'],
-  ['DUE1', '手続き期限\n（1回目の期日）'],
+  ['CONTRACT', '契約日\n更新は空欄で前回満了の翌日'],
+  ['DUE1', '手続き期限\n（1回目の期日）\n更新は空欄で契約日の前日'],
   ['COUNT', '支払回数\n（一括＝1）'],
   ['INTERVAL', '支払間隔（月）\n空欄なら自動'],
   ['METHOD', '支払方法'],
@@ -216,6 +216,12 @@ function processRow_(ss, sh, rowNum, row, s) {
     const d = nextDayAfterPreviousEnd_(normEmail_(row[IN.EMAIL - 1]), s);
     row[IN.CONTRACT - 1] = d;
     sh.getRange(rowNum, IN.CONTRACT).setValue(d);
+  }
+  // 更新で手続き期限が空欄なら、契約日の前日にする
+  if (String(row[IN.KUBUN - 1]).trim() === '更新' && !toDate_(row[IN.DUE1 - 1]) && toDate_(row[IN.CONTRACT - 1])) {
+    const due = defaultRenewalDue_(toDate_(row[IN.CONTRACT - 1]));
+    row[IN.DUE1 - 1] = due;
+    sh.getRange(rowNum, IN.DUE1).setValue(due);
   }
   const c = buildContract_(row, s, readPrice_(ss));
   if (!c.id) c.id = 'P' + Utilities.formatDate(new Date(), TZ, 'yyMMddHHmmss') + '-' + rowNum;
@@ -958,10 +964,12 @@ function setupInputSheet_(ss) {
 /** 後から追加した列の見出しが無ければ足す（既存シート向け） */
 function ensureInputHeaders_(sh) {
   ensureSize_(sh, 2, IN_COLS.length);
+  sh.setRowHeight(1, 70);
   const cur = sh.getRange(1, 1, 1, IN_COLS.length).getValues()[0];
   IN_COLS.forEach(function (c, i) {
-    // 覚書の日付の見出しは説明を変えたので、古い見出しなら書き換える
-    if (cur[i] !== '' && !(c[0] === 'MEMO_DATE' && cur[i] !== c[1] && /^覚書の日付/.test(cur[i]))) return;
+    // 見出しの説明を後から変えた列は、1行目（項目名）が同じなら新しい見出しに書き換える
+    const name = c[1].split('\n')[0];
+    if (cur[i] !== '' && !(cur[i] !== c[1] && String(cur[i]).split('\n')[0] === name)) return;
     sh.getRange(1, i + 1).setValue(c[1]).setFontWeight('bold').setBackground('#fde9d9').setWrap(true);
     if (c[0] === 'MEMO_DATE') sh.getRange(2, i + 1, sh.getMaxRows() - 1, 1).setNumberFormat('yyyy/m/d');
   });
@@ -1544,6 +1552,15 @@ function toDate_(v) {
   if (Object.prototype.toString.call(v) === '[object Date]') return isNaN(v.getTime()) ? null : startOfDay_(v);
   const m = toHalfWidth_(v == null ? '' : v).trim().match(/^(\d{4})[\/\-年.](\d{1,2})[\/\-月.](\d{1,2})日?/);
   return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+}
+
+/** 更新の手続き期限の初期値：契約日の前日。もう過ぎていたら手入力してもらう */
+function defaultRenewalDue_(contractDate) {
+  const due = addDays_(contractDate, -1);
+  if (due < startOfDay_(new Date())) {
+    throw new Error('契約日の前日（' + Utilities.formatDate(due, TZ, 'yyyy/M/d') + '）はもう過ぎています。手続き期限を入力してください');
+  }
+  return due;
 }
 
 /** 覚書の日付の初期値：手続き期限の N 日前。それが今日より前なら今日 */
