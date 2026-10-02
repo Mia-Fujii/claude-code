@@ -504,9 +504,11 @@ function updateMemberList_(c, s) {
   }
   const old = oldIdx >= 0 ? data[oldIdx] : null;
 
+  // 個別コンサルスタート月：入力があればそれ。更新で元の行があれば、元の値をそのまま引き継ぐ
   let start = c.kobetsuStart;
   if (!start) {
-    if (c.kobetsu === 'なし') start = 'ー';
+    if (c.kubun === '更新' && old) start = old[5];
+    else if (c.kobetsu === 'なし') start = 'ー';
     else if (c.kubun === '新規') start = Utilities.formatDate(addMonths_(firstOfMonth_(c.contractDate), 1), TZ, 'yyyy年M月') + '〜';
     else start = '';
   }

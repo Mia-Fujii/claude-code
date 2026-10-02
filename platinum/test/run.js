@@ -312,7 +312,7 @@ test('メンバーリスト：更新は元の行を消して一番下へ、過�
     const rows = sh.grid.filter((r) => r[2] !== '');
     assert.deepStrictEqual(rows.map((r) => r[2]), ['氏名', 'A', 'B', '衣笠あけみ']);
     const k = rows[3];
-    assert.deepStrictEqual([k[0], k[1], k[4], k[5]], [3, 'プラチナ（個別なし）', 'メモ', 'ー']);
+    assert.deepStrictEqual([k[0], k[1], k[4], k[5]], [3, 'プラチナ（個別なし）', 'メモ', '2025年11月〜']); // 更新はスタート月を引き継ぐ
     assert.deepStrictEqual(k.slice(6, 10).map(fmt), ['2026/10/17', '2027/10/16', '2025/10/17', '2026/10/16']);
     assert.deepStrictEqual(rows.slice(1).map((r) => r[0]), [1, 2, 3]);
     assert.strictEqual(sh.bg[3][1], '#fce5cd');
