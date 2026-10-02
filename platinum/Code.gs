@@ -167,6 +167,7 @@ function processChecked() {
   try {
     const ss = SpreadsheetApp.getActive();
     const sh = ss.getSheetByName(SHEET.INPUT);
+    ensureFoldersAndTemplates_();
     const s = getSettings_();
     const last = sh.getLastRow();
     if (last < 2) { ui.alert('「契約入力」にデータがありません。'); return; }
@@ -493,7 +494,7 @@ function createMemo_(c, s) {
   if (!tplId) throw new Error('覚書雛形IDが設定にありません（初期設定を実行してください）');
   const folder = DriveApp.getFolderById(s['覚書保存フォルダID']);
   const title = '（個別' + c.kobetsu + c.n + '分割）' + c.name + '様' + c.programName + 'に関する覚書';
-  const copy = DriveApp.getFileById(tplId).makeCopy(title, folder);
+  const copy = DriveApp.getFileById(idFromUrl_(tplId)).makeCopy(title, folder);
   const doc = DocumentApp.openById(copy.getId());
   const body = doc.getBody();
 
@@ -611,7 +612,7 @@ function linkBlock_(cardParts) {
 /** テンプレのドキュメントを読む。1行目の「件名：」を件名として取り出す */
 function loadTemplate_(docId, label) {
   if (!docId) throw new Error('「' + label + '」のテンプレートが設定にありません（初期設定を実行してください）');
-  return parseTemplateText_(DocumentApp.openById(docId).getBody().getText());
+  return parseTemplateText_(DocumentApp.openById(idFromUrl_(docId)).getBody().getText());
 }
 
 function parseTemplateText_(text) {
@@ -647,6 +648,7 @@ function renderTemplate_(text, vars) {
 
 function dailyCheck() {
   const ss = SpreadsheetApp.getActive();
+  ensureFoldersAndTemplates_();
   const s = getSettings_();
   const sh = ss.getSheetByName(SHEET.SCHEDULE);
   const last = sh.getLastRow();
@@ -816,26 +818,7 @@ function setup() {
   const blank = ss.getSheetByName('シート1');
   if (blank && blank.getLastRow() === 0 && ss.getSheets().length > 1) ss.deleteSheet(blank);
 
-  const s = getSettings_();
-  const folder = ensureFolder_(s['フォルダID'], 'プラチナ自動化', DriveApp.getRootFolder());
-  setSetting_('フォルダID', folder.getId());
-  const memoFolder = ensureFolder_(s['覚書保存フォルダID'], '覚書', folder);
-  setSetting_('覚書保存フォルダID', memoFolder.getId());
-  const tplFolder = ensureSubFolder_(folder, 'テンプレート');
-
-  const docs = [
-    ['覚書雛形ID', '【雛形】プラチナプログラム 覚書', null],
-    ['メール_新規_一括', '【メール】新規_一括', MAIL_TEMPLATES['新規_一括']],
-    ['メール_新規_分割', '【メール】新規_分割', MAIL_TEMPLATES['新規_分割']],
-    ['メール_更新_一括', '【メール】更新_一括', MAIL_TEMPLATES['更新_一括']],
-    ['メール_更新_分割', '【メール】更新_分割', MAIL_TEMPLATES['更新_分割']],
-    ['メール_支払案内', '【メール】2回目以降の支払い案内', MAIL_TEMPLATES['支払案内']],
-  ];
-  docs.forEach(function (d) {
-    if (s[d[0]] && fileExists_(s[d[0]])) return;
-    const id = d[2] === null ? createMemoTemplate_(d[1], tplFolder) : createTextDoc_(d[1], d[2], tplFolder);
-    setSetting_(d[0], id);
-  });
+  const folder = ensureFoldersAndTemplates_();
 
   // 毎朝のチェック
   ScriptApp.getProjectTriggers().forEach(function (t) {
@@ -849,6 +832,42 @@ function setup() {
   notes.push('📁 フォルダ：' + folder.getUrl());
   notes.push('次は「チャットワークのトークンを登録」と、「設定」シートのチャットワーク_ルームIDの入力をお願いします。');
   ui.alert('初期設定', notes.join('\n\n'), ui.ButtonSet.OK);
+}
+
+/**
+ * フォルダと雛形・メールテンプレのドキュメントを用意し、IDを設定シートに入れる。
+ * 設定が空・ファイルが消えている時は、テンプレートフォルダ内の同じ名前のドキュメントを使い、
+ * それも無ければ作り直す（初期設定が途中で止まった場合もここで直る）。
+ */
+function ensureFoldersAndTemplates_() {
+  const s = getSettings_();
+  const folder = ensureFolder_(s['フォルダID'], 'プラチナ自動化', DriveApp.getRootFolder());
+  if (s['フォルダID'] !== folder.getId()) setSetting_('フォルダID', folder.getId());
+  const memoFolder = ensureFolder_(s['覚書保存フォルダID'], '覚書', folder);
+  if (s['覚書保存フォルダID'] !== memoFolder.getId()) setSetting_('覚書保存フォルダID', memoFolder.getId());
+  const tplFolder = ensureSubFolder_(folder, 'テンプレート');
+
+  const docs = [
+    ['覚書雛形ID', '【雛形】プラチナプログラム 覚書', null],
+    ['メール_新規_一括', '【メール】新規_一括', MAIL_TEMPLATES['新規_一括']],
+    ['メール_新規_分割', '【メール】新規_分割', MAIL_TEMPLATES['新規_分割']],
+    ['メール_更新_一括', '【メール】更新_一括', MAIL_TEMPLATES['更新_一括']],
+    ['メール_更新_分割', '【メール】更新_分割', MAIL_TEMPLATES['更新_分割']],
+    ['メール_支払案内', '【メール】2回目以降の支払い案内', MAIL_TEMPLATES['支払案内']],
+  ];
+  docs.forEach(function (d) {
+    if (s[d[0]] && fileExists_(idFromUrl_(s[d[0]]))) return;
+    let id = '';
+    const it = tplFolder.getFilesByName(d[1]);
+    while (it.hasNext()) {
+      const f = it.next();
+      if (!f.isTrashed()) { id = f.getId(); break; }
+    }
+    if (!id) id = d[2] === null ? createMemoTemplate_(d[1], tplFolder) : createTextDoc_(d[1], d[2], tplFolder);
+    setSetting_(d[0], id);
+  });
+  SpreadsheetApp.flush();
+  return folder;
 }
 
 function setupSettingsSheet_(ss) {
