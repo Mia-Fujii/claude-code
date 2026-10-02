@@ -291,7 +291,11 @@ function processRow_(ss, sh, rowNum, row, s) {
   String(row[IN.DONE - 1] || '').split(',').filter(String).forEach(function (k) { done[k] = true; });
   const step = function (name, fn) {
     if (done[name]) return;
-    fn();
+    try {
+      fn();
+    } catch (err) {
+      throw new Error('［' + name + '］' + err.message);
+    }
     done[name] = true;
     put(IN.DONE, Object.keys(done).join(','));
     SpreadsheetApp.flush();
@@ -627,7 +631,7 @@ function createMemo_(c, s) {
   const folder = DriveApp.getFolderById(s['覚書保存フォルダID']);
   const title = c.name + '様' + c.programName + 'に関する覚書';
   const copy = DriveApp.getFileById(idFromUrl_(tplId)).makeCopy(title, folder);
-  const doc = DocumentApp.openById(copy.getId());
+  const doc = openDoc_(copy.getId(), '作成した覚書');
   const body = doc.getBody();
 
   const vars = {
@@ -772,7 +776,7 @@ function textToHtml_(text) {
 /** テンプレのドキュメントを読む。1行目の「件名：」を件名として取り出す */
 function loadTemplate_(docId, label) {
   if (!docId) throw new Error('「' + label + '」のテンプレートが設定にありません（初期設定を実行してください）');
-  return parseTemplateText_(DocumentApp.openById(idFromUrl_(docId)).getBody().getText());
+  return parseTemplateText_(openDoc_(idFromUrl_(docId), 'メールテンプレート「' + label + '」').getBody().getText());
 }
 
 function parseTemplateText_(text) {
@@ -1020,7 +1024,7 @@ function ensureFoldersAndTemplates_() {
   // 以前の不具合でタイトルしか入っていない覚書の雛形ができていたら、ゴミ箱に入れて作り直す
   const usable = function (key, id) {
     if (key !== '覚書雛形ID') return true;
-    if (/\{\{支払明細\}\}/.test(DocumentApp.openById(id).getBody().getText())) return true;
+    if (/\{\{支払明細\}\}/.test(openDoc_(id, '覚書の雛形').getBody().getText())) return true;
     DriveApp.getFileById(id).setTrashed(true);
     return false;
   };
@@ -1533,6 +1537,30 @@ const MAIL_TEMPLATES = {
 /* ============================================================
  * 小さな道具
  * ============================================================ */
+
+/**
+ * ドキュメントを開く。作成・コピーした直後は Google 側の準備が間に合わず開けないことがあるので、
+ * 少し待って何度か開き直す。それでも駄目ならどのドキュメントか分かるエラーにする。
+ */
+function openDoc_(id, label) {
+  let lastErr = null;
+  for (let i = 0; i < 5; i++) {
+    try {
+      return DocumentApp.openById(id);
+    } catch (err) {
+      lastErr = err;
+      Utilities.sleep(1500 * (i + 1));
+    }
+  }
+  let state = '';
+  try {
+    const f = DriveApp.getFileById(id);
+    state = f.isTrashed() ? '（ゴミ箱に入っています）' : '（' + f.getName() + '）';
+  } catch (e) {
+    state = '（ドライブに見つかりません）';
+  }
+  throw new Error(label + 'を開けませんでした' + state + '：' + (lastErr && lastErr.message));
+}
 
 function getSettings_() {
   const sh = SpreadsheetApp.getActive().getSheetByName(SHEET.SETTINGS);

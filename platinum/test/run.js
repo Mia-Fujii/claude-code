@@ -7,6 +7,7 @@ const assert = require('assert');
 
 const pad = (n, w = 2) => String(n).padStart(w, '0');
 const Utilities = {
+  sleep() {},
   formatDate(d, tz, f) {
     const map = {
       yyyy: d.getFullYear(), yy: pad(d.getFullYear() % 100), MM: pad(d.getMonth() + 1), M: d.getMonth() + 1,
@@ -230,6 +231,16 @@ test('メールのHTML：URLはリンク、改行は<br>、記号はエスケー
   assert.ok(h.includes('<a href="https://mosh.jp/services/f78?openExternalBrowser=1">https://mosh.jp/services/f78?openExternalBrowser=1</a>.'));
   assert.ok(h.includes('&lt;注意&gt; &amp; 1,000円'));
   assert.ok(h.includes('＞＞<br>\n<a') && h.includes('jpy</a><br>\n<br>\n'));
+});
+
+test('ドキュメントを開く：失敗しても開き直す／駄目ならどれか分かるエラー', () => {
+  let n = 0;
+  g.DocumentApp = { openById: () => { if (++n < 3) throw new Error('missing'); return 'DOC'; } };
+  assert.strictEqual(g.openDoc_('X', '覚書の雛形'), 'DOC');
+  assert.strictEqual(n, 3);
+  g.DocumentApp = { openById: () => { throw new Error('missing'); } };
+  g.DriveApp = { getFileById: () => ({ isTrashed: () => true }) };
+  assert.throws(() => g.openDoc_('X', 'メールテンプレート「メール_更新_分割」'), /メールテンプレート「メール_更新_分割」を開けませんでした（ゴミ箱に入っています）/);
 });
 
 console.log(`\n${passed} tests passed`);
