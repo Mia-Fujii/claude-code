@@ -863,6 +863,15 @@ function ensureFoldersAndTemplates_() {
       const f = it.next();
       if (!f.isTrashed()) { id = f.getId(); break; }
     }
+    if (!id) {
+      // 以前の初期設定で作られたままマイドライブに残っている物があれば、フォルダへ移して使う
+      const stray = DriveApp.getRootFolder().getFilesByName(d[1]);
+      while (stray.hasNext()) {
+        const f = stray.next();
+        if (f.isTrashed()) continue;
+        if (!id) { f.moveTo(tplFolder); id = f.getId(); } else { f.setTrashed(true); }
+      }
+    }
     if (!id) id = d[2] === null ? createMemoTemplate_(d[1], tplFolder) : createTextDoc_(d[1], d[2], tplFolder);
     setSetting_(d[0], id);
   });
@@ -979,9 +988,10 @@ function createMemoTemplate_(name, folder) {
     if (l[2]) p.editAsText().setBold(true).setFontSize(14);
     else if (l[0]) p.editAsText().setBold(false).setFontSize(11);
   });
+  const id = doc.getId(); // saveAndClose の後は doc に触れないので先に取っておく
   doc.saveAndClose();
-  DriveApp.getFileById(doc.getId()).moveTo(folder);
-  return doc.getId();
+  DriveApp.getFileById(id).moveTo(folder);
+  return id;
 }
 
 function createTextDoc_(name, text, folder) {
@@ -990,9 +1000,10 @@ function createTextDoc_(name, text, folder) {
   const lines = text.split('\n');
   body.getParagraphs()[0].setText(lines[0]);
   lines.slice(1).forEach(function (l) { body.appendParagraph(l); });
+  const id = doc.getId(); // saveAndClose の後は doc に触れないので先に取っておく
   doc.saveAndClose();
-  DriveApp.getFileById(doc.getId()).moveTo(folder);
-  return doc.getId();
+  DriveApp.getFileById(id).moveTo(folder);
+  return id;
 }
 
 /* ============================================================
