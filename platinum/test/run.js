@@ -268,4 +268,57 @@ test('グレー判定：手塗りのグレーだけ', () => {
   for (const c of ['#ffffff', '#000000', '#ffff00', '#00ff00', '', null]) assert.ok(!g.isGrey_(c), String(c));
 });
 
+// 簡易スプレッドシート（values と背景色だけ持つ）
+function fakeSheet(values) {
+  const W = 26;
+  const grid = values.map((r) => { const a = r.slice(); while (a.length < W) a.push(''); return a; });
+  const bg = grid.map(() => new Array(W).fill(null));
+  let maxRows = Math.max(grid.length, 60);
+  const ensure = (r) => { while (grid.length < r) { grid.push(new Array(W).fill('')); bg.push(new Array(W).fill(null)); } };
+  const sh = {
+    grid, bg,
+    getDataRange: () => ({ getValues: () => grid.map((r) => r.slice()) }),
+    getLastRow: () => { for (let i = grid.length - 1; i >= 0; i--) if (grid[i].some((v) => v !== '')) return i + 1; return 0; },
+    getMaxRows: () => maxRows, getMaxColumns: () => W,
+    insertRowsAfter: (a, n) => { maxRows += n; }, insertColumnsAfter: () => {},
+    deleteRow: (r) => { grid.splice(r - 1, 1); bg.splice(r - 1, 1); },
+    getRange: (r, c, nr = 1, nc = 1) => {
+      ensure(r + nr - 1);
+      return {
+        getValues: () => grid.slice(r - 1, r - 1 + nr).map((row) => row.slice(c - 1, c - 1 + nc)),
+        setValues: (v) => { v.forEach((row, i) => row.forEach((x, j) => { grid[r - 1 + i][c - 1 + j] = x; })); },
+        setNumberFormat: () => {},
+        setBackground: (col) => { for (let i = 0; i < nr; i++) for (let j = 0; j < nc; j++) bg[r - 1 + i][c - 1 + j] = col; },
+        copyTo: (dest, opt) => { /* formatOnly: 背景をコピー */ },
+        getFormula: () => '',
+      };
+    },
+  };
+  return sh;
+}
+
+test('メンバーリスト：更新は元の行を消して一番下へ、過去期間をI列へ、個別なしはオレンジ', () => {
+  const sh = fakeSheet([
+    ['', 'メールリスト', '氏名', 'メールアドレス', '備考', '個別', '契約日', '契約満了', '終了分'],
+    [1, 'プラチナメンバー', 'A', 'a@x.jp', '', '', D(2025, 11, 1), D(2026, 10, 31)],
+    [45, 'プラチナメンバー', '衣笠あけみ', 'melodyranran810@gmail.com', 'メモ', '2025年11月〜', D(2025, 10, 17), D(2026, 10, 16)],
+    [3, 'プラチナメンバー', 'B', 'b@x.jp', '', '', D(2026, 2, 1), D(2027, 1, 31), D(2025, 2, 1), D(2026, 1, 31)],
+  ]);
+  const orig = g.openTab_;
+  g.openTab_ = () => sh;
+  try {
+    const c = g.buildContract_(row({ KUBUN: '更新', KOBETSU: 'なし', NAME: '衣笠あけみ', EMAIL: 'Melodyranran810@gmail.com ', CONTRACT: D(2026, 10, 17), DUE1: D(2026, 10, 16), COUNT: 12, METHOD: 'スクエア', REST: 46000 }), S, []);
+    const m = g.updateMemberList_(c, { 'メールリスト名_個別あり': 'プラチナメンバー', 'メールリスト名_個別なし': 'プラチナ（個別なし）' });
+    const rows = sh.grid.filter((r) => r[2] !== '');
+    assert.deepStrictEqual(rows.map((r) => r[2]), ['氏名', 'A', 'B', '衣笠あけみ']);
+    const k = rows[3];
+    assert.deepStrictEqual([k[0], k[1], k[4], k[5]], [3, 'プラチナ（個別なし）', 'メモ', 'ー']);
+    assert.deepStrictEqual(k.slice(6, 10).map(fmt), ['2026/10/17', '2027/10/16', '2025/10/17', '2026/10/16']);
+    assert.deepStrictEqual(rows.slice(1).map((r) => r[0]), [1, 2, 3]);
+    assert.strictEqual(sh.bg[3][1], '#fce5cd');
+    assert.strictEqual(sh.bg[3][2], null);
+    assert.ok(m.note.includes('元の3行目を削除') && m.note.includes('4行目'), m.note);
+  } finally { g.openTab_ = orig; }
+});
+
 console.log(`\n${passed} tests passed`);

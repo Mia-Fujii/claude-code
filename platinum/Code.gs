@@ -296,8 +296,8 @@ function runProcessing_(onlyRows) {
     const results = [];
     targets.forEach(function (t) {
       try {
-        processRow_(ss, sh, t.rowNum, t.row, s);
-        results.push('✅ ' + t.row[IN.NAME - 1]);
+        const report = processRow_(ss, sh, t.rowNum, t.row, s);
+        results.push('✅ ' + t.row[IN.NAME - 1] + '（' + s['モード'] + '）\n' + report.join('\n'));
       } catch (err) {
         sh.getRange(t.rowNum, IN.STATUS).setValue('エラー：' + err.message);
         sh.getRange(t.rowNum, IN.CHECK).setValue(false);
@@ -350,10 +350,12 @@ function processRow_(ss, sh, rowNum, row, s) {
 
   const done = {};
   String(row[IN.DONE - 1] || '').split(',').filter(String).forEach(function (k) { done[k] = true; });
+  const report = [];
   const step = function (name, fn) {
-    if (done[name]) return;
+    if (done[name]) { report.push('　・' + name + '：前回完了済みのため飛ばしました'); return; }
     try {
-      fn();
+      const note = fn();
+      report.push('　・' + name + '：' + (note || '完了'));
     } catch (err) {
       throw new Error('［' + name + '］' + err.message);
     }
@@ -363,11 +365,12 @@ function processRow_(ss, sh, rowNum, row, s) {
   };
 
   step('メンバーリスト', function () {
-    const start = updateMemberList_(c, s);
-    if (!row[IN.KOBETSU_START - 1] && start) put(IN.KOBETSU_START, start);
+    const m = updateMemberList_(c, s);
+    if (!row[IN.KOBETSU_START - 1] && m.start) put(IN.KOBETSU_START, m.start);
+    return m.note;
   });
-  step('分割支払い', function () { appendSplitSheet_(c, s); });
-  step('税理士', function () { appendTaxSheet_(c, s); });
+  step('分割支払い', function () { return '「' + s['分割支払い_タブ名'] + '」' + appendSplitSheet_(c, s) + '行目に追加'; });
+  step('税理士', function () { return '「' + s['税理士シート_タブ名'] + '」' + appendTaxSheet_(c, s) + '行目に追加'; });
   step('支払予定', function () { appendSchedule_(ss, c, s); });
   step('料金マスタ', function () { if (!c.oneTime) addPriceIfNew_(ss, c); });
   if (c.n > 1) {
@@ -385,6 +388,7 @@ function processRow_(ss, sh, rowNum, row, s) {
   put(IN.STATUS, '完了');
   put(IN.CHECK, false);
   put(IN.PROCESSED_AT, new Date());
+  return report;
 }
 
 /**
@@ -518,6 +522,7 @@ function updateMemberList_(c, s) {
   const newRow = [0, listName, c.name, c.email, old ? old[4] : '', start, c.contractDate, c.endDate].concat(history);
 
   if (old) sh.deleteRow(oldIdx + 1);
+  const oldRowNum = oldIdx + 1;
 
   const lastRow = lastDataRow_(sh, 3);
   const target = lastRow + 1;
@@ -527,15 +532,22 @@ function updateMemberList_(c, s) {
   }
   sh.getRange(target, 1, 1, newRow.length).setValues([newRow]);
   sh.getRange(target, 7, 1, newRow.length - 6).setNumberFormat('yyyy/m/d');
-  // 契約期間の列は背景色を引き継がない（終わった期間のグレーは条件付き書式で自動で付く）
-  sh.getRange(target, 7, 1, sh.getMaxColumns() - 6).setBackground(null);
+  // 背景色は上の行から引き継がない（黄色の目印や終わった期間のグレーが移らないように）。
+  // メールリスト欄は、個別なしなら薄いオレンジにする
+  sh.getRange(target, 1, 1, sh.getMaxColumns()).setBackground(null);
+  if (c.kobetsu === 'なし') sh.getRange(target, 2).setBackground(KOBETSU_NASHI_COLOR);
 
   // A列の番号を振り直す
   const names = sh.getRange(2, 3, target - 1, 1).getValues();
   let no = 0;
   const nums = names.map(function (r) { return [r[0] !== '' ? ++no : '']; });
   sh.getRange(2, 1, nums.length, 1).setValues(nums);
-  return start;
+  const note = old
+    ? '元の' + oldRowNum + '行目を削除して、一番下（' + target + '行目）に追加'
+    : (c.kubun === '更新'
+      ? '⚠️ メールアドレス（' + c.email + '）の方が見つからなかったので、一番下（' + target + '行目）に新しく追加しました。元の行が残っていれば手で消してください'
+      : '一番下（' + target + '行目）に追加');
+  return { start: start, note: note };
 }
 
 /**
@@ -583,6 +595,8 @@ function redoMemo() {
 /** 契約期間のグレー表示に使う条件付き書式の式（G2 起点。奇数列＝開始日は右隣の満了日、偶数列＝満了日は自分を見る） */
 const GREY_FORMULA = '=IF(ISODD(COLUMN()),AND(ISNUMBER(H2),H2<TODAY()),AND(ISNUMBER(G2),G2<TODAY()))';
 const GREY_COLOR = '#cccccc';
+/** メンバーリストで「プラチナ（個別なし）」のメールリスト欄に付ける薄いオレンジ */
+const KOBETSU_NASHI_COLOR = '#fce5cd';
 
 /**
  * 最新版メンバーリストの契約期間（G列以降、2列で1組）を、満了日が過ぎたら自動でグレーにする。
@@ -655,23 +669,34 @@ function nextDayAfterPreviousEnd_(email, s) {
 function appendSplitSheet_(c, s) {
   const sh = openTab_(s['メンバーリストURL'], s['分割支払い_タブ名']);
   const lastRow = lastDataRow_(sh, 2);
-  let no = 0;
-  if (lastRow >= 2) {
-    sh.getRange(2, 1, lastRow - 1, 1).getValues().forEach(function (r) {
-      const v = Number(r[0]);
-      if (v > no) no = v;
-    });
-  }
-  const row = [no + 1, c.name, c.email, c.contractDate, c.endDate, c.countLabel, c.methodLabel, '']
+  const row = ['', c.name, c.email, c.contractDate, c.endDate, c.countLabel, c.methodLabel, '']
     .concat(c.schedule.map(function (p) { return p.date; }));
   const target = lastRow + 1;
   ensureSize_(sh, target, row.length);
+  // A列（番号）は上の行が「=row()-1」のような式ならその式を使い、数字なら続きの番号にする
+  const prevFormula = lastRow >= 2 ? sh.getRange(lastRow, 1).getFormula() : '';
+  if (!prevFormula) {
+    let no = 0;
+    if (lastRow >= 2) {
+      sh.getRange(2, 1, lastRow - 1, 1).getValues().forEach(function (r) {
+        const v = Number(r[0]);
+        if (v > no) no = v;
+      });
+    }
+    row[0] = no + 1;
+  }
   if (lastRow >= 2) {
     sh.getRange(lastRow, 1, 1, row.length).copyTo(sh.getRange(target, 1, 1, row.length), { formatOnly: true });
   }
-  sh.getRange(target, 1, 1, row.length).setValues([row]);
+  if (prevFormula) {
+    sh.getRange(lastRow, 1).copyTo(sh.getRange(target, 1)); // 式を相対参照のままコピー
+    sh.getRange(target, 2, 1, row.length - 1).setValues([row.slice(1)]);
+  } else {
+    sh.getRange(target, 1, 1, row.length).setValues([row]);
+  }
   sh.getRange(target, 4, 1, 2).setNumberFormat('yyyy/m/d');
   sh.getRange(target, 9, 1, c.schedule.length).setNumberFormat('yyyy/m/d');
+  return target;
 }
 
 /**
@@ -691,6 +716,7 @@ function appendTaxSheet_(c, s) {
   sh.getRange(target, 4, 1, 2).setNumberFormat('yyyy/m/d');
   sh.getRange(target, 8).setNumberFormat('yyyy/mm/dd');
   sh.getRange(target, 9).setNumberFormat('"¥"#,##0');
+  return target;
 }
 
 /* ---------- このスプレッドシート内 ---------- */
