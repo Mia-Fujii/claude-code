@@ -416,6 +416,7 @@ function buildContract_(row, s, priceRows) {
   if (!(n >= 1 && Math.floor(n) === n)) errors.push('支払回数');
   if (METHODS.indexOf(method) < 0) errors.push('支払方法');
   if (errors.length) throw new Error('入力が足りないか形式が違います：' + errors.join('、'));
+  if (kubun === '新規' && kobetsu === 'なし') throw new Error('新規は個別コンサル「あり」のみです。新規/更新か個別コンサルを確認してください');
 
   const price = findPrice_(priceRows, kubun, kobetsu, n, method);
 
@@ -509,8 +510,7 @@ function updateMemberList_(c, s) {
   if (!start) {
     if (c.kubun === '更新' && old) start = old[5];
     else if (c.kobetsu === 'なし') start = 'ー';
-    else if (c.kubun === '新規') start = Utilities.formatDate(addMonths_(firstOfMonth_(c.contractDate), 1), TZ, 'yyyy年M月') + '〜';
-    else start = '';
+    else start = ''; // 新規は空欄のまま（勝手に月を入れない）
   }
 
   const history = [];

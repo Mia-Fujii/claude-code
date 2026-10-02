@@ -338,4 +338,21 @@ test('支払予定に入れる回：1回目＋通知の対象の回だけ', () =
   assert.deepStrictEqual(rowsFor('銀行振込すべて', 12, 'スクエア'), [1]);
 });
 
+test('新規は個別ありのみ', () => {
+  assert.throws(() => g.buildContract_(row({ KUBUN: '新規', KOBETSU: 'なし', NAME: 'x', EMAIL: 'a@b.jp', CONTRACT: D(2026, 11, 1), DUE1: D(2026, 10, 31), COUNT: 1, METHOD: '銀行振込', TOTAL: 1 }), S, []), /新規は個別コンサル「あり」のみ/);
+});
+
+test('メンバーリスト：新規でスタート月が空欄なら空欄のまま', () => {
+  const sh = fakeSheet([['', 'メールリスト', '氏名', 'メールアドレス'], [1, 'プラチナメンバー', 'A', 'a@x.jp']]);
+  const orig = g.openTab_;
+  g.openTab_ = () => sh;
+  try {
+    const c = g.buildContract_(row({ KUBUN: '新規', KOBETSU: 'あり', NAME: '新人', EMAIL: 'new@x.jp', CONTRACT: D(2026, 11, 1), DUE1: D(2026, 10, 31), COUNT: 1, METHOD: '銀行振込', TOTAL: 1 }), S, []);
+    const m = g.updateMemberList_(c, { 'メールリスト名_個別あり': 'プラチナメンバー', 'メールリスト名_個別なし': 'プラチナ（個別なし）' });
+    assert.strictEqual(m.start, '');
+    assert.strictEqual(sh.grid[2][5], '');
+    assert.strictEqual(sh.grid[2][1], 'プラチナメンバー');
+  } finally { g.openTab_ = orig; }
+});
+
 console.log(`\n${passed} tests passed`);
