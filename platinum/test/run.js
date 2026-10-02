@@ -282,6 +282,7 @@ function fakeSheet(values) {
     getMaxRows: () => maxRows, getMaxColumns: () => W,
     insertRowsAfter: (a, n) => { maxRows += n; }, insertColumnsAfter: () => {},
     deleteRow: (r) => { grid.splice(r - 1, 1); bg.splice(r - 1, 1); },
+    insertRowAfter: (r) => { grid.splice(r, 0, new Array(W).fill('')); bg.splice(r, 0, new Array(W).fill(null)); },
     getRange: (r, c, nr = 1, nc = 1) => {
       ensure(r + nr - 1);
       return {
@@ -352,6 +353,28 @@ test('メンバーリスト：新規でスタート月が空欄なら契約日�
     assert.strictEqual(m.start, '2026年12月〜');
     assert.strictEqual(sh.grid[2][5], '2026年12月〜');
     assert.strictEqual(sh.grid[2][1], 'プラチナメンバー');
+  } finally { g.openTab_ = orig; }
+});
+
+test('メンバーリスト：下のピボット・集計を上書きせず、一覧の直後に行を挿入', () => {
+  const blank = [];
+  const sh = fakeSheet([
+    ['', 'メールリスト', '氏名', 'メールアドレス'],
+    [1, 'プラチナメンバー', 'A', 'a@x.jp'],
+    [2, 'プラチナ（個別なし）', '衣笠あけみ', 'melodyranran810@gmail.com', '', '2025年11月〜', D(2025, 10, 17), D(2026, 10, 16)],
+    [3, 'プラチナメンバー', 'B', 'b@x.jp'],
+    blank, blank,
+    ['', 'メールリスト', '人数'],
+    ['', 'プラチナメンバー', 2],
+  ]);
+  const orig = g.openTab_;
+  g.openTab_ = () => sh;
+  try {
+    const c = g.buildContract_(row({ KUBUN: '更新', KOBETSU: 'なし', NAME: '衣笠あけみ', EMAIL: 'melodyranran810@gmail.com', CONTRACT: D(2026, 10, 17), DUE1: D(2026, 10, 16), COUNT: 12, METHOD: 'スクエア', REST: 46000 }), S, []);
+    g.updateMemberList_(c, { 'メールリスト名_個別あり': 'プラチナメンバー', 'メールリスト名_個別なし': 'プラチナ（個別なし）' });
+    const names = sh.grid.map((r) => r[2]);
+    assert.deepStrictEqual(names.slice(0, 8), ['氏名', 'A', 'B', '衣笠あけみ', '', '', '人数', 2]);
+    assert.deepStrictEqual(sh.grid.slice(0, 8).map((r) => r[0]), ['', 1, 2, 3, '', '', '', '']); // 集計のA列は触らない
   } finally { g.openTab_ = orig; }
 });
 

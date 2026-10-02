@@ -527,9 +527,12 @@ function updateMemberList_(c, s) {
   if (old) sh.deleteRow(oldIdx + 1);
   const oldRowNum = oldIdx + 1;
 
-  const lastRow = lastDataRow_(sh, 3);
+  // メンバー一覧の最後＝見出しから氏名（C列）が途切れずに続く最後の行。
+  // その下にピボットや集計があっても上書きしないよう、行を挿入してから書く（下の物は1行ずれるだけ）
+  const lastRow = lastMemberRow_(sh);
   const target = lastRow + 1;
   ensureSize_(sh, target, newRow.length);
+  sh.insertRowAfter(lastRow);
   if (lastRow >= 2) {
     sh.getRange(lastRow, 1, 1, sh.getMaxColumns()).copyTo(sh.getRange(target, 1, 1, sh.getMaxColumns()), { formatOnly: true });
   }
@@ -666,6 +669,18 @@ function nextDayAfterPreviousEnd_(email, s) {
     return addDays_(end, 1);
   }
   throw new Error('メンバーリストにこのメールアドレスの方がいません。契約日を入力してください');
+}
+
+/** メンバー一覧の最後の行（1行目の見出しから、C列の氏名が途切れずに続く最後の行） */
+function lastMemberRow_(sh) {
+  const n = Math.max(sh.getLastRow(), 1);
+  const names = sh.getRange(1, 3, n, 1).getValues();
+  let last = 1;
+  for (let i = 1; i < names.length; i++) {
+    if (String(names[i][0]).trim() === '') break;
+    last = i + 1;
+  }
+  return last;
 }
 
 /** 分割支払い：1行追加（一括も1回目期日だけ入れて追加） */
