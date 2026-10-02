@@ -767,7 +767,7 @@ function switchToTest() {
   const s = getSettings_();
   if (s['モード'] === 'テスト') { ui.alert('すでにテストモードです。'); return; }
   const ok = ui.alert('テスト用コピーに切り替えます',
-    'メンバーリストと税理士シートのコピーを「プラチナ自動化」フォルダに作り、以後の書き込み先をコピーに切り替えます。\n本物のシートには書き込まれなくなります。\n\n※Gmailの下書きとチャットワーク通知は実際に作成・送信されます（メール自体は送信されません）。',
+    'メンバーリストと税理士シートのコピーを「プラチナ契約対応」フォルダに作り、以後の書き込み先をコピーに切り替えます。\n本物のシートには書き込まれなくなります。\n\n※Gmailの下書きとチャットワーク通知は実際に作成・送信されます（メール自体は送信されません）。',
     ui.ButtonSet.OK_CANCEL);
   if (ok !== ui.Button.OK) return;
   const folder = DriveApp.getFolderById(s['フォルダID']);
@@ -841,7 +841,7 @@ function setup() {
  */
 function ensureFoldersAndTemplates_() {
   const s = getSettings_();
-  const folder = ensureFolder_(s['フォルダID'], 'プラチナ自動化', DriveApp.getRootFolder());
+  const folder = ensureFolder_(s['フォルダID'], 'プラチナ契約対応', DriveApp.getRootFolder());
   if (s['フォルダID'] !== folder.getId()) setSetting_('フォルダID', folder.getId());
   const memoFolder = ensureFolder_(s['覚書保存フォルダID'], '覚書', folder);
   if (s['覚書保存フォルダID'] !== memoFolder.getId()) setSetting_('覚書保存フォルダID', memoFolder.getId());
