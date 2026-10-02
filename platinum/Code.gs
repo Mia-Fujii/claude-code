@@ -510,7 +510,8 @@ function updateMemberList_(c, s) {
   if (!start) {
     if (c.kubun === '更新' && old) start = old[5];
     else if (c.kobetsu === 'なし') start = 'ー';
-    else start = ''; // 新規は空欄のまま（勝手に月を入れない）
+    else if (c.kubun === '新規') start = Utilities.formatDate(addMonths_(firstOfMonth_(c.contractDate), 1), TZ, 'yyyy年M月') + '〜'; // 新規は契約日の翌月（当月などは入力で上書き）
+    else start = '';
   }
 
   const history = [];
