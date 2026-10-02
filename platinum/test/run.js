@@ -184,4 +184,31 @@ test('総額が空欄：1回の金額×回数で計算', () => {
   assert.throws(() => g.buildContract_(row(base), S, []), /金額が入っていません/);
 });
 
+test('覚書の雛形：全行が書き込まれ、閉じた後に触らない', () => {
+  const paras = [];
+  let closed = false;
+  const mkPara = (text) => {
+    const p = { text, setText(x) { if (closed) throw new Error('closed'); this.text = x; }, // 本物と同じく何も返さない
+      setHeading() { return this; }, setAlignment() { return this; },
+      editAsText() { const e = { setBold: () => e, setFontSize: () => e }; return e; } };
+    paras.push(p); return p;
+  };
+  mkPara('');
+  const doc = {
+    getId() { if (closed) throw new Error('Document is closed'); return 'DOC1'; },
+    getBody: () => ({ getParagraphs: () => paras, appendParagraph: (x) => { if (closed) throw new Error('closed'); return mkPara(x); } }),
+    saveAndClose() { closed = true; },
+  };
+  let moved = null;
+  g.DocumentApp = { create: () => doc, ParagraphHeading: { NORMAL: 'N' }, HorizontalAlignment: { CENTER: 'C', RIGHT: 'R' } };
+  g.DriveApp = { getFileById: (id) => ({ moveTo: (f) => { moved = [id, f]; } }) };
+  const id = g.createMemoTemplate_('雛形', 'FOLDER');
+  assert.strictEqual(id, 'DOC1');
+  assert.deepStrictEqual(moved, ['DOC1', 'FOLDER']);
+  const text = paras.map((p) => p.text).join('\n');
+  assert.ok(text.startsWith('費用に関する覚書\n'));
+  for (const k of ['{{氏名}}', '{{支払明細}}', '{{作成日}}', '甲が乙に対して', 'ヴォンドラ高橋若菜']) assert.ok(text.includes(k), k);
+  assert.ok(!text.includes('乙が甲に対して') && !text.includes('髙橋'));
+});
+
 console.log(`\n${passed} tests passed`);

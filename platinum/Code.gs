@@ -117,6 +117,8 @@ function onOpen() {
     .createMenu('プラチナ管理')
     .addItem('✅ チェックした契約を処理する', 'processChecked')
     .addSeparator()
+    .addItem('🔁 選択した行の覚書を作り直す', 'redoMemo')
+    .addSeparator()
     .addItem('🔔 支払い期日チェックを今すぐ実行', 'dailyCheck')
     .addSeparator()
     .addItem('🧪 テスト用コピーに切り替える', 'switchToTest')
@@ -469,6 +471,48 @@ function updateMemberList_(c, s) {
   return start;
 }
 
+/**
+ * 「契約入力」で選んでいる行の覚書を作り直す（雛形を直した時など）。
+ * 古い覚書ドキュメントとPDFはゴミ箱に入れる。メンバーリストなど他のシートには触らない。
+ */
+function redoMemo() {
+  const ui = SpreadsheetApp.getUi();
+  const ss = SpreadsheetApp.getActive();
+  const sh = ss.getActiveSheet();
+  if (sh.getName() !== SHEET.INPUT) { ui.alert('「契約入力」シートで、作り直したい方の行を選んでから押してください。'); return; }
+  ensureFoldersAndTemplates_();
+  const s = getSettings_();
+  const sel = sh.getActiveRange();
+  const r1 = Math.max(2, sel.getRow());
+  const r2 = sel.getRow() + sel.getNumRows() - 1;
+  if (r2 < r1) { ui.alert('作り直したい方の行を選んでください。'); return; }
+  const rows = sh.getRange(r1, 1, r2 - r1 + 1, IN_COLS.length).getValues();
+  const targets = rows.map(function (row, i) { return { rowNum: r1 + i, row: row }; })
+    .filter(function (x) { return x.row[IN.NAME - 1] !== '' && Number(x.row[IN.COUNT - 1]) > 1 && String(x.row[IN.STATUS - 1]).indexOf('完了') === 0; });
+  if (!targets.length) { ui.alert('選んだ行に、処理が完了した分割の方がいません。'); return; }
+  const ok = ui.alert('覚書を作り直します',
+    targets.map(function (x) { return '・' + x.row[IN.NAME - 1]; }).join('\n') + '\n\n古い覚書とPDFはゴミ箱に入ります。よろしいですか？',
+    ui.ButtonSet.YES_NO);
+  if (ok !== ui.Button.YES) return;
+  const results = [];
+  targets.forEach(function (x) {
+    try {
+      [x.row[IN.MEMO_DOC - 1], x.row[IN.MEMO_PDF - 1]].forEach(function (u) {
+        const m = String(u || '').match(/\/d\/([-\w]{20,})/);
+        if (m) { try { DriveApp.getFileById(m[1]).setTrashed(true); } catch (e) { /* もう無い */ } }
+      });
+      const c = buildContract_(x.row, s, readPrice_(ss));
+      const memo = createMemo_(c, s);
+      sh.getRange(x.rowNum, IN.MEMO_DOC).setValue(memo.docUrl);
+      sh.getRange(x.rowNum, IN.MEMO_PDF).setValue(memo.pdfUrl);
+      results.push('✅ ' + c.name);
+    } catch (err) {
+      results.push('❌ ' + x.row[IN.NAME - 1] + '：' + err.message);
+    }
+  });
+  ui.alert('結果', results.join('\n'), ui.ButtonSet.OK);
+}
+
 /** 最新版メンバーリストから、そのメールアドレスの方の契約満了日の翌日を返す */
 function nextDayAfterPreviousEnd_(email, s) {
   if (!email) throw new Error('更新で契約日を空欄にする時は、メールアドレスを入れてください');
@@ -581,7 +625,7 @@ function createMemo_(c, s) {
   const tplId = s['覚書雛形ID'];
   if (!tplId) throw new Error('覚書雛形IDが設定にありません（初期設定を実行してください）');
   const folder = DriveApp.getFolderById(s['覚書保存フォルダID']);
-  const title = '（個別' + c.kobetsu + c.n + '分割）' + c.name + '様' + c.programName + 'に関する覚書';
+  const title = c.name + '様' + c.programName + 'に関する覚書';
   const copy = DriveApp.getFileById(idFromUrl_(tplId)).makeCopy(title, folder);
   const doc = DocumentApp.openById(copy.getId());
   const body = doc.getBody();
@@ -945,13 +989,20 @@ function ensureFoldersAndTemplates_() {
     ['メール_更新_分割', '【メール】更新_分割', MAIL_TEMPLATES['更新_分割']],
     ['メール_支払案内', '【メール】2回目以降の支払い案内', MAIL_TEMPLATES['支払案内']],
   ];
+  // 以前の不具合でタイトルしか入っていない覚書の雛形ができていたら、ゴミ箱に入れて作り直す
+  const usable = function (key, id) {
+    if (key !== '覚書雛形ID') return true;
+    if (/\{\{支払明細\}\}/.test(DocumentApp.openById(id).getBody().getText())) return true;
+    DriveApp.getFileById(id).setTrashed(true);
+    return false;
+  };
   docs.forEach(function (d) {
-    if (s[d[0]] && fileExists_(idFromUrl_(s[d[0]]))) return;
+    if (s[d[0]] && fileExists_(idFromUrl_(s[d[0]])) && usable(d[0], idFromUrl_(s[d[0]]))) return;
     let id = '';
     const it = tplFolder.getFilesByName(d[1]);
     while (it.hasNext()) {
       const f = it.next();
-      if (!f.isTrashed()) { id = f.getId(); break; }
+      if (!f.isTrashed() && usable(d[0], f.getId())) { id = f.getId(); break; }
     }
     if (!id) {
       // 以前の初期設定で作られたままマイドライブに残っている物があれば、フォルダへ移して使う
@@ -959,7 +1010,7 @@ function ensureFoldersAndTemplates_() {
       while (stray.hasNext()) {
         const f = stray.next();
         if (f.isTrashed()) continue;
-        if (!id) { f.moveTo(tplFolder); id = f.getId(); } else { f.setTrashed(true); }
+        if (!id && usable(d[0], f.getId())) { f.moveTo(tplFolder); id = f.getId(); } else if (!f.isTrashed()) { f.setTrashed(true); }
       }
     }
     if (!id) id = d[2] === null ? createMemoTemplate_(d[1], tplFolder) : createTextDoc_(d[1], d[2], tplFolder);
@@ -1087,7 +1138,9 @@ function createMemoTemplate_(name, folder) {
   ];
   const first = body.getParagraphs()[0];
   lines.forEach(function (l, i) {
-    const p = i === 0 ? first.setText(l[0]) : body.appendParagraph(l[0]);
+    // Paragraph.setText は何も返さないので、1行目は first をそのまま使う
+    if (i === 0) first.setText(l[0]);
+    const p = i === 0 ? first : body.appendParagraph(l[0]);
     p.setHeading(DocumentApp.ParagraphHeading.NORMAL);
     if (l[1]) p.setAlignment(l[1]);
     if (l[2]) p.editAsText().setBold(true).setFontSize(14);
