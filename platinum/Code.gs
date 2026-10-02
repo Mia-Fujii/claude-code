@@ -671,7 +671,7 @@ function createContractDraft_(c, s) {
   const key = 'メール_' + c.kubun + '_' + (c.n === 1 ? '一括' : '分割');
   const tpl = loadTemplate_(s[key], key);
   const vars = contractMailVars_(c, s);
-  GmailApp.createDraft(c.email, renderTemplate_(tpl.subject, vars), renderTemplate_(tpl.body, vars));
+  createDraft_(c.email, renderTemplate_(tpl.subject, vars), renderTemplate_(tpl.body, vars));
 }
 
 function contractMailVars_(c, s) {
@@ -739,6 +739,34 @@ function linkBlock_(cardParts) {
   return cardParts.map(function (p, i) {
     return (i + 1) + '枚目クレジットカード（' + man_(p.amount, '円') + '）\n' + url(p);
   }).join('\n\n');
+}
+
+/** 下書きを作る。HTMLメールにして、URLはクリックできるリンクにする（テキスト版も一緒に入れる） */
+function createDraft_(to, subject, body) {
+  GmailApp.createDraft(to, subject, body, { htmlBody: textToHtml_(body) });
+}
+
+/** 改行はそのまま、URLは <a> リンクにしたHTMLを作る */
+function textToHtml_(text) {
+  const esc = function (s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  };
+  // URLの終わり：空白・全角文字・括弧・「」など。末尾の句読点は含めない
+  const urlRe = /https?:\/\/[A-Za-z0-9\-._~:\/?#\[\]@!$&'*+,;=%]+/g;
+  const html = String(text).split('\n').map(function (line) {
+    let out = '';
+    let last = 0;
+    line.replace(urlRe, function (m, offset) {
+      let url = m;
+      const trail = url.match(/[.,;:!?)\]]+$/);
+      if (trail) url = url.slice(0, -trail[0].length);
+      out += esc(line.slice(last, offset)) + '<a href="' + esc(url) + '">' + esc(url) + '</a>';
+      last = offset + url.length;
+      return m;
+    });
+    return out + esc(line.slice(last));
+  }).join('<br>\n');
+  return '<div>' + html + '</div>';
 }
 
 /** テンプレのドキュメントを読む。1行目の「件名：」を件名として取り出す */
@@ -852,7 +880,7 @@ function createReminderDraft_(r, s) {
     '振込口座': method === '銀行振込' ? bankBlock_(s, amount) : '',
     '決済リンク': method === '銀行振込' ? '' : linkBlock_([{ amount: amount, link: link }]),
   };
-  GmailApp.createDraft(normEmail_(r[SCH['メールアドレス']]), renderTemplate_(tpl.subject, vars), renderTemplate_(tpl.body, vars));
+  createDraft_(normEmail_(r[SCH['メールアドレス']]), renderTemplate_(tpl.subject, vars), renderTemplate_(tpl.body, vars));
 }
 
 function postChatwork_(s, text) {

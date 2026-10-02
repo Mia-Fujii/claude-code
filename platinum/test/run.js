@@ -211,4 +211,13 @@ test('覚書の雛形：全行が書き込まれ、閉じた後に触らない',
   assert.ok(!text.includes('乙が甲に対して') && !text.includes('髙橋'));
 });
 
+test('メールのHTML：URLはリンク、改行は<br>、記号はエスケープ', () => {
+  const h = g.textToHtml_('決済リンクはこちら＞＞\nhttps://paypal.me/crozentokyo/350000jpy\n\nフォーム（https://forms.gle/abc）です。<注意> & 1,000円\nhttps://mosh.jp/services/f78?openExternalBrowser=1.');
+  assert.ok(h.includes('<a href="https://paypal.me/crozentokyo/350000jpy">https://paypal.me/crozentokyo/350000jpy</a>'));
+  assert.ok(h.includes('（<a href="https://forms.gle/abc">https://forms.gle/abc</a>）です。'));
+  assert.ok(h.includes('<a href="https://mosh.jp/services/f78?openExternalBrowser=1">https://mosh.jp/services/f78?openExternalBrowser=1</a>.'));
+  assert.ok(h.includes('&lt;注意&gt; &amp; 1,000円'));
+  assert.ok(h.includes('＞＞<br>\n<a') && h.includes('jpy</a><br>\n<br>\n'));
+});
+
 console.log(`\n${passed} tests passed`);
