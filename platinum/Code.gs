@@ -175,6 +175,7 @@ function processChecked() {
 function onCheckEdit(e) {
   if (!e || !e.range) return;
   const sh = e.range.getSheet();
+  if (sh.getName() === SHEET.SCHEDULE) { onScheduleEdit_(e); return; }
   if (sh.getName() !== SHEET.INPUT) return;
   const c1 = e.range.getColumn();
   const c2 = c1 + e.range.getNumColumns() - 1;
@@ -186,6 +187,65 @@ function onCheckEdit(e) {
   const rows = [];
   checks.forEach(function (v, i) { if (v[0] === true) rows.push(r1 + i); });
   if (rows.length) runProcessing_(rows);
+}
+
+/**
+ * 「支払予定」で入金済・入金日を編集した時：
+ *   入金済にチェックが入って入金日が空欄なら今日の日付を入れる。
+ *   1回目の入金日が入ったら、税理士シートのその契約の行の「決済日」に書き込む。
+ */
+function onScheduleEdit_(e) {
+  const sh = e.range.getSheet();
+  const paidCol = SCH['入金済'] + 1;
+  const dateCol = SCH['入金日'] + 1;
+  const c1 = e.range.getColumn();
+  const c2 = c1 + e.range.getNumColumns() - 1;
+  if ((paidCol < c1 || paidCol > c2) && (dateCol < c1 || dateCol > c2)) return;
+  const r1 = Math.max(2, e.range.getRow());
+  const r2 = e.range.getRow() + e.range.getNumRows() - 1;
+  if (r2 < r1) return;
+  const s = getSettings_();
+  const rows = sh.getRange(r1, 1, r2 - r1 + 1, SCH_HEADERS.length).getValues();
+  const done = [];
+  rows.forEach(function (r, i) {
+    const rowNum = r1 + i;
+    let paidDate = toDate_(r[SCH['入金日']]);
+    if (r[SCH['入金済']] === true && !paidDate) {
+      paidDate = startOfDay_(new Date());
+      sh.getRange(rowNum, dateCol).setValue(paidDate).setNumberFormat('yyyy/m/d');
+    }
+    if (!paidDate || Number(r[SCH['回']]) !== 1) return;
+    try {
+      const ok = updateTaxPaymentDate_(String(r[SCH['契約ID']]), normEmail_(r[SCH['メールアドレス']]), paidDate, s);
+      sh.getRange(rowNum, SCH['メモ'] + 1).setValue(ok ? '税理士シートに決済日を記入済' : '税理士シートに該当の行が見つかりません');
+      if (ok) done.push(r[SCH['氏名']]);
+    } catch (err) {
+      sh.getRange(rowNum, SCH['メモ'] + 1).setValue('税理士シートへの記入エラー：' + err.message);
+    }
+  });
+  if (done.length) SpreadsheetApp.getActive().toast(done.join('、') + '様の決済日を税理士シートに記入しました', 'プラチナ管理', 5);
+}
+
+/** 契約IDから契約日を調べ、税理士シートでメールアドレスと契約日が一致する行の決済日を入れる */
+function updateTaxPaymentDate_(contractId, email, paidDate, s) {
+  const input = SpreadsheetApp.getActive().getSheetByName(SHEET.INPUT);
+  let contractDate = null;
+  if (input.getLastRow() >= 2) {
+    const vals = input.getRange(2, 1, input.getLastRow() - 1, IN_COLS.length).getValues();
+    for (let i = 0; i < vals.length; i++) {
+      if (String(vals[i][IN.ID - 1]) === contractId) { contractDate = toDate_(vals[i][IN.CONTRACT - 1]); break; }
+    }
+  }
+  const sh = openTab_(s['税理士シートURL'], s['税理士シート_タブ名']);
+  const data = sh.getDataRange().getValues();
+  for (let i = data.length - 1; i >= 1; i--) { // 新しい契約ほど下にあるので下から探す
+    if (normEmail_(data[i][2]) !== email) continue;
+    const d = toDate_(data[i][3]);
+    if (contractDate && (!d || d.getTime() !== contractDate.getTime())) continue;
+    sh.getRange(i + 1, 8).setValue(paidDate).setNumberFormat('yyyy/mm/dd');
+    return true;
+  }
+  return false;
 }
 
 /** onlyRows が null なら全行、配列ならその行番号だけを対象にする */
@@ -553,12 +613,14 @@ function appendSplitSheet_(c, s) {
   sh.getRange(target, 9, 1, c.schedule.length).setNumberFormat('yyyy/m/d');
 }
 
-/** 税理士シート「プラチナ」：1契約＝1行。決済金額は一括・併用は総額、分割は1回あたり */
+/**
+ * 税理士シート「プラチナ」：1契約＝1行。決済金額は総額。
+ * 決済日は空欄で追加し、「支払予定」で1回目の入金日を入れた時に書き込む（updateTaxPaymentDate_）。
+ */
 function appendTaxSheet_(c, s) {
   const sh = openTab_(s['税理士シートURL'], s['税理士シート_タブ名']);
   const lastRow = lastDataRow_(sh, 2);
-  const amount = c.n === 1 ? c.total : c.rest;
-  const row = ['', c.name, c.email, c.contractDate, c.endDate, c.countLabel, c.methodLabel, c.due1, amount, c.n + '回'];
+  const row = ['', c.name, c.email, c.contractDate, c.endDate, c.countLabel, c.methodLabel, '', c.total, c.n + '回'];
   const target = lastRow + 1;
   ensureSize_(sh, target, row.length);
   if (lastRow >= 2) {

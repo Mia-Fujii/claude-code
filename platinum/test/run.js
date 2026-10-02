@@ -243,4 +243,24 @@ test('ドキュメントを開く：失敗しても開き直す／駄目なら�
   assert.throws(() => g.openDoc_('X', 'メールテンプレート「メール_更新_分割」'), /メールテンプレート「メール_更新_分割」を開けませんでした（ゴミ箱に入っています）/);
 });
 
+test('税理士シートの決済日：メールと契約日が一致する行に入れる', () => {
+  const inputRow = row({ ID: 'P1', CONTRACT: D(2026, 10, 17) });
+  g.SpreadsheetApp = { getActive: () => ({ getSheetByName: () => ({ getLastRow: () => 2, getRange: () => ({ getValues: () => [inputRow] }) }) }) };
+  const data = [
+    ['', '氏名', 'メール', '契約日'],
+    ['', '衣笠あけみ', 'melodyranran810@gmail.com', D(2025, 10, 17)],
+    ['', '衣笠あけみ', 'melodyranran810@gmail.com', D(2026, 10, 17)],
+    ['', '別の人', 'x@y.jp', D(2026, 10, 17)],
+  ];
+  const writes = [];
+  const orig = g.openTab_;
+  g.openTab_ = () => ({ getDataRange: () => ({ getValues: () => data }),
+    getRange: (r, c) => ({ setValue: (v) => { writes.push([r, c, fmt(v)]); return { setNumberFormat: () => {} }; } }) });
+  try {
+    assert.strictEqual(g.updateTaxPaymentDate_('P1', 'melodyranran810@gmail.com', D(2026, 10, 15), {}), true);
+    assert.deepStrictEqual(writes, [[3, 8, '2026/10/15']]);
+    assert.strictEqual(g.updateTaxPaymentDate_('P1', 'none@x.jp', D(2026, 10, 15), {}), false);
+  } finally { g.openTab_ = orig; }
+});
+
 console.log(`\n${passed} tests passed`);
