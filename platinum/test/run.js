@@ -171,4 +171,15 @@ test('更新の手続き期限：契約日の前日／過ぎていればエラ�
   assert.throws(() => g.defaultRenewalDue_(D(2020, 11, 1)), /2020\/10\/31）はもう過ぎています/);
 });
 
+test('総額が空欄：1回の金額×回数で計算', () => {
+  const base = { KUBUN: '更新', KOBETSU: 'なし', NAME: 'x', EMAIL: 'a@b.jp', CONTRACT: D(2026, 11, 1), DUE1: D(2026, 10, 31), COUNT: 12, METHOD: 'スクエア' };
+  const c = g.buildContract_(row({ ...base, REST: 46000 }), S, []);
+  assert.strictEqual(c.total, 552000);
+  assert.ok(c.schedule.every((p) => p.amount === 46000));
+  const h = g.buildContract_(row({ ...base, COUNT: 3, FIRST: 300000, REST: 400000 }), S, []);
+  assert.strictEqual(h.total, 1100000);
+  assert.strictEqual(g.buildContract_(row({ ...base, COUNT: 1, FIRST: 1100000 }), S, []).total, 1100000);
+  assert.throws(() => g.buildContract_(row(base), S, []), /総額が入っていません/);
+});
+
 console.log(`\n${passed} tests passed`);

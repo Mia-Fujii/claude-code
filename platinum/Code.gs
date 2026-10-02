@@ -40,7 +40,7 @@ const IN_COLS = [
   ['MIX', '併用の内訳\n例）銀行振込 40万, PayPal 35万, PayPal 35万'],
   ['TOTAL', '総額'],
   ['FIRST', '1回目の金額'],
-  ['REST', '2回目以降の\n1回の金額'],
+  ['REST', '2回目以降の\n1回の金額\n（分割はここだけでOK）'],
   ['LINK', '決済リンク\n（PayPalは空欄で自動）'],
   ['KOBETSU_START', '個別コンサル\nスタート月'],
   ['ONETIME', '今回だけの金額\n（料金マスタに登録しない）'],
@@ -311,6 +311,13 @@ function buildContract_(row, s, priceRows) {
     const sum = parts.reduce(function (a, p) { return a + p.amount; }, 0);
     if (total == null) total = sum;
     else if (total !== sum) throw new Error('総額 ' + yen_(total) + '円 と併用の内訳の合計 ' + yen_(sum) + '円 が合いません');
+  }
+  // 総額が空欄で1回の金額が入っていれば、そこから計算する（例：46,000円×12回＝552,000円）
+  if (total == null) {
+    const f = parseAmount_(get('FIRST'));
+    const r = parseAmount_(get('REST'));
+    if (n === 1 && f != null) total = f;
+    else if (r != null) total = (f != null ? f : r) + r * (n - 1);
   }
   if (total == null && price) total = price.total;
   if (!total) throw new Error('総額が入っていません（料金マスタにも該当がありません）');
