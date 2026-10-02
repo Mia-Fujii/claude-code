@@ -139,4 +139,19 @@ test('全メールテンプレに未知の目印がない', () => {
   assert.ok(!/\{\{/.test(rb) && rb.includes('ご入金額：710,000円（税込）'));
 });
 
+test('更新で契約日が空欄：メンバーリストの契約満了日の翌日', () => {
+  const data = [
+    ['', 'メールリスト', '氏名', 'メールアドレス', '備考', '個別', '契約日', '契約満了'],
+    [1, 'プラチナメンバー', '中村沙樹', 'musicspice7777@gmail.com', '', '', D(2026, 9, 1), D(2027, 8, 31)],
+    [2, 'プラチナメンバー', 'x', 'mailto:Foo@Example.com', '', '', D(2025, 11, 1), '2026/10/31'],
+  ];
+  const orig = g.openTab_;
+  g.openTab_ = () => ({ getDataRange: () => ({ getValues: () => data }) });
+  try {
+    assert.strictEqual(fmt(g.nextDayAfterPreviousEnd_('musicspice7777@gmail.com', {})), '2027/9/1');
+    assert.strictEqual(fmt(g.nextDayAfterPreviousEnd_('foo@example.com', {})), '2026/11/1');
+    assert.throws(() => g.nextDayAfterPreviousEnd_('none@example.com', {}), /メンバーリストにこのメールアドレスの方がいません/);
+  } finally { g.openTab_ = orig; }
+});
+
 console.log(`\n${passed} tests passed`);

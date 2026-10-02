@@ -205,6 +205,13 @@ function processChecked() {
 }
 
 function processRow_(ss, sh, rowNum, row, s) {
+  // 更新で契約日が空欄なら、メンバーリストの前回の契約満了日の翌日にする
+  // （書き戻しておくので、やり直した時も同じ日付が使われる）
+  if (String(row[IN.KUBUN - 1]).trim() === '更新' && !toDate_(row[IN.CONTRACT - 1])) {
+    const d = nextDayAfterPreviousEnd_(normEmail_(row[IN.EMAIL - 1]), s);
+    row[IN.CONTRACT - 1] = d;
+    sh.getRange(rowNum, IN.CONTRACT).setValue(d);
+  }
   const c = buildContract_(row, s, readPrice_(ss));
   if (!c.id) c.id = 'P' + Utilities.formatDate(new Date(), TZ, 'yyMMddHHmmss') + '-' + rowNum;
 
@@ -392,6 +399,19 @@ function updateMemberList_(c, s) {
   const nums = names.map(function (r) { return [r[0] !== '' ? ++no : '']; });
   sh.getRange(2, 1, nums.length, 1).setValues(nums);
   return start;
+}
+
+/** 最新版メンバーリストから、そのメールアドレスの方の契約満了日の翌日を返す */
+function nextDayAfterPreviousEnd_(email, s) {
+  if (!email) throw new Error('更新で契約日を空欄にする時は、メールアドレスを入れてください');
+  const data = openTab_(s['メンバーリストURL'], s['メンバーリスト_タブ名']).getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (normEmail_(data[i][3]) !== email) continue;
+    const end = toDate_(data[i][7]);
+    if (!end) throw new Error('メンバーリストに契約満了日が入っていません。契約日を入力してください');
+    return addDays_(end, 1);
+  }
+  throw new Error('メンバーリストにこのメールアドレスの方がいません。契約日を入力してください');
 }
 
 /** 分割支払い：1行追加（一括も1回目期日だけ入れて追加） */
