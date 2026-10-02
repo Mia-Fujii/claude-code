@@ -1136,45 +1136,57 @@ function setupPriceSheet_(ss) {
   sh.setColumnWidth(10, 220);
 }
 
-/** 覚書の雛形ドキュメント（甲が乙に対して支払う形に修正済み） */
+/**
+ * 覚書の雛形ドキュメント（甲が乙に対して支払う形に修正済み）。
+ * 書式は元の覚書に合わせる：タイトル中央14pt、本文両端揃え、1.2.は番号付きリスト、
+ * 「記」と支払明細は中央、「以上」と日付は右、署名欄は左。
+ */
 function createMemoTemplate_(name, folder) {
   const doc = DocumentApp.create(name);
+  const id = doc.getId(); // saveAndClose の後は doc に触れないので先に取っておく
   const body = doc.getBody();
-  const P = DocumentApp.HorizontalAlignment;
+  const A = DocumentApp.HorizontalAlignment;
   const lines = [
-    ['費用に関する覚書', P.CENTER, true],
-    ['', null],
-    ['{{氏名}}様（以下「甲」という。）及びヴォンドラ高橋若菜（以下「乙」という。）は、甲乙間で結んだ{{プログラム名}}契約において定める費用に関し、次のとおり合意する。', null],
-    ['', null],
-    ['1. 甲が乙に対して、{{プログラム名}}契約にて支払うべき費用を、合計{{合計金額}}とし、支払方法は分割払い（{{分割回数}}分割）とする。', null],
-    ['2. 分割払いの具体的な方法は、下記のとおりとする。', null],
-    ['', null],
-    ['記', P.CENTER],
-    ['', null],
-    ['{{支払明細}}', null],
-    ['', null],
-    ['以上', P.RIGHT],
-    ['', null],
-    ['{{作成日}}', null],
-    ['', null],
-    ['甲　住所', null],
-    ['　　氏名', null],
-    ['', null],
-    ['乙　住所：東京都港区麻布台3-2-8', null],
-    ['　　　　　株式会社CROZEN', null],
-    ['　　　　　代表取締役　ヴォンドラ高橋若菜', null],
+    ['費用に関する覚書', A.CENTER, { size: 14 }],
+    ['', A.JUSTIFY],
+    ['{{氏名}}様（以下「甲」という。）及びヴォンドラ高橋若菜（以下「乙」という。）は、甲乙間で結んだ{{プログラム名}}契約において定める費用に関し、次のとおり合意する。', A.JUSTIFY],
+    ['甲が乙に対して、{{プログラム名}}契約にて支払うべき費用を、合計{{合計金額}}とし、支払方法は分割払い（{{分割回数}}分割）とする。', A.JUSTIFY, { list: true }],
+    ['分割払いの具体的な方法は、下記のとおりとする。', A.JUSTIFY, { list: true }],
+    ['記', A.CENTER],
+    ['', A.CENTER],
+    ['{{支払明細}}', A.CENTER],
+    ['', A.CENTER],
+    ['以上', A.RIGHT],
+    ['{{作成日}}', A.RIGHT],
+    ['', A.LEFT],
+    ['甲　住所', A.LEFT],
+    ['　　氏名', A.LEFT],
+    ['', A.LEFT],
+    ['乙　住所：東京都港区麻布台3-2-8', A.LEFT],
+    ['　　　　　株式会社CROZEN', A.LEFT],
+    ['　　　　　代表取締役　ヴォンドラ高橋若菜', A.LEFT],
   ];
   const first = body.getParagraphs()[0];
+  let firstItem = null;
   lines.forEach(function (l, i) {
-    // Paragraph.setText は何も返さないので、1行目は first をそのまま使う
-    if (i === 0) first.setText(l[0]);
-    const p = i === 0 ? first : body.appendParagraph(l[0]);
-    p.setHeading(DocumentApp.ParagraphHeading.NORMAL);
-    if (l[1]) p.setAlignment(l[1]);
-    if (l[2]) p.editAsText().setBold(true).setFontSize(14);
-    else if (l[0]) p.editAsText().setBold(false).setFontSize(11);
+    const o = l[2] || {};
+    let p;
+    if (o.list) {
+      p = body.appendListItem(l[0]);
+      p.setGlyphType(DocumentApp.GlyphType.NUMBER);
+      if (firstItem) p.setListId(firstItem); else firstItem = p;
+      p.setSpacingBefore(12);
+      p.setSpacingAfter(12);
+    } else if (i === 0) {
+      first.setText(l[0]); // Paragraph.setText は何も返さないので first をそのまま使う
+      p = first;
+    } else {
+      p = body.appendParagraph(l[0]);
+    }
+    if (!o.list) p.setHeading(DocumentApp.ParagraphHeading.NORMAL);
+    p.setAlignment(l[1]);
+    if (l[0]) p.editAsText().setBold(false).setFontSize(o.size || 11);
   });
-  const id = doc.getId(); // saveAndClose の後は doc に触れないので先に取っておく
   doc.saveAndClose();
   DriveApp.getFileById(id).moveTo(folder);
   return id;
