@@ -1,7 +1,7 @@
 /**
  * プラチナプログラム 契約管理
  *
- * 「契約入力」シートに1行入力して ✅ を付け、メニュー「プラチナ管理 → チェックした契約を処理する」を押すと:
+ * 「契約入力」シートに1行入力して「処理する」にチェックを入れると（確認画面のあと）:
  *   1. クライアント様のメンバーリスト「最新版メンバーリスト」を更新（更新の方は一番下へ移動し、過去の期間をI列以降に残す）
  *   2. 同じスプレッドシートの「分割支払い」に1行追加
  *   3. 税理士さん共有用シート「プラチナ」に1行追加
@@ -160,11 +160,38 @@ function onEdit(e) {
  * 契約の処理
  * ============================================================ */
 
+/** メニューから：チェックが付いた未処理の行をまとめて処理する */
 function processChecked() {
+  ensureEditTrigger_();
+  runProcessing_(null);
+}
+
+/**
+ * チェックを入れたらすぐ処理する（インストール型の編集トリガーから呼ばれる）。
+ * 確認画面で「いいえ」を押したら、チェックを外して何もしない。
+ */
+function onCheckEdit(e) {
+  if (!e || !e.range) return;
+  const sh = e.range.getSheet();
+  if (sh.getName() !== SHEET.INPUT) return;
+  const c1 = e.range.getColumn();
+  const c2 = c1 + e.range.getNumColumns() - 1;
+  if (IN.CHECK < c1 || IN.CHECK > c2) return;
+  const r1 = Math.max(2, e.range.getRow());
+  const r2 = e.range.getRow() + e.range.getNumRows() - 1;
+  if (r2 < r1) return;
+  const checks = sh.getRange(r1, IN.CHECK, r2 - r1 + 1, 1).getValues();
+  const rows = [];
+  checks.forEach(function (v, i) { if (v[0] === true) rows.push(r1 + i); });
+  if (rows.length) runProcessing_(rows);
+}
+
+/** onlyRows が null なら全行、配列ならその行番号だけを対象にする */
+function runProcessing_(onlyRows) {
   const ui = SpreadsheetApp.getUi();
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(10000)) {
-    ui.alert('他の処理が実行中です。少し待ってからもう一度押してください。');
+    ui.alert('他の処理が実行中です。少し待ってから、メニューの「チェックした契約を処理する」を押してください。');
     return;
   }
   try {
@@ -178,12 +205,19 @@ function processChecked() {
     if (last < 2) { ui.alert('「契約入力」にデータがありません。'); return; }
     const values = sh.getRange(2, 1, last - 1, IN_COLS.length).getValues();
     const targets = [];
+    const alreadyDone = [];
     values.forEach(function (row, i) {
-      if (row[IN.CHECK - 1] === true && String(row[IN.STATUS - 1]).indexOf('完了') !== 0) {
-        targets.push({ rowNum: i + 2, row: row });
-      }
+      const rowNum = i + 2;
+      if (onlyRows && onlyRows.indexOf(rowNum) < 0) return;
+      if (row[IN.CHECK - 1] !== true) return;
+      if (String(row[IN.STATUS - 1]).indexOf('完了') === 0) { alreadyDone.push(rowNum); return; }
+      targets.push({ rowNum: rowNum, row: row });
     });
-    if (!targets.length) { ui.alert('「処理する」にチェックが付いた未処理の行がありません。'); return; }
+    alreadyDone.forEach(function (r) { if (onlyRows) sh.getRange(r, IN.CHECK).setValue(false); });
+    if (!targets.length) {
+      ui.alert(alreadyDone.length ? 'この行はすでに処理が完了しています。' : '「処理する」にチェックが付いた未処理の行がありません。');
+      return;
+    }
 
     const names = targets.map(function (t) { return '・' + t.row[IN.NAME - 1]; }).join('\n');
     const ok = ui.alert(
@@ -191,7 +225,10 @@ function processChecked() {
       names + '\n\nよろしいですか？',
       ui.ButtonSet.YES_NO
     );
-    if (ok !== ui.Button.YES) return;
+    if (ok !== ui.Button.YES) {
+      targets.forEach(function (t) { sh.getRange(t.rowNum, IN.CHECK).setValue(false); });
+      return;
+    }
 
     const results = [];
     targets.forEach(function (t) {
@@ -200,13 +237,24 @@ function processChecked() {
         results.push('✅ ' + t.row[IN.NAME - 1]);
       } catch (err) {
         sh.getRange(t.rowNum, IN.STATUS).setValue('エラー：' + err.message);
+        sh.getRange(t.rowNum, IN.CHECK).setValue(false);
         results.push('❌ ' + t.row[IN.NAME - 1] + '：' + err.message);
       }
     });
-    ui.alert('処理結果', results.join('\n'), ui.ButtonSet.OK);
+    ui.alert('処理結果', results.join('\n') + (results.some(function (r) { return r.indexOf('❌') === 0; })
+      ? '\n\n❌ の行は「状態」の列を見て直してから、もう一度チェックを入れてください。' : ''), ui.ButtonSet.OK);
   } finally {
     lock.releaseLock();
   }
+}
+
+/** チェックを入れたら動く編集トリガーを、まだ無ければ作る */
+function ensureEditTrigger_() {
+  const ss = SpreadsheetApp.getActive();
+  const exists = ScriptApp.getProjectTriggers().some(function (t) {
+    return t.getHandlerFunction() === 'onCheckEdit';
+  });
+  if (!exists) ScriptApp.newTrigger('onCheckEdit').forSpreadsheet(ss).onEdit().create();
 }
 
 function processRow_(ss, sh, rowNum, row, s) {
@@ -867,9 +915,10 @@ function setup() {
   });
   const hour = Math.min(23, Math.max(0, Number(getSettings_()['通知_時刻']) || 9));
   ScriptApp.newTrigger('dailyCheck').timeBased().everyDays(1).atHour(hour).inTimezone(TZ).create();
+  ensureEditTrigger_();
 
   ss.setActiveSheet(ss.getSheetByName(SHEET.INPUT));
-  notes.push('✅ シート・テンプレート・毎朝' + hour + '時ごろのチェックを設定しました。');
+  notes.push('✅ シート・テンプレート・毎朝' + hour + '時ごろのチェック・「処理する」にチェックを入れたら動く仕組みを設定しました。');
   notes.push('📁 フォルダ：' + folder.getUrl());
   notes.push('次は「チャットワークのトークンを登録」と、「設定」シートのチャットワーク_ルームIDの入力をお願いします。');
   ui.alert('初期設定', notes.join('\n\n'), ui.ButtonSet.OK);
