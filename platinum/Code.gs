@@ -50,6 +50,8 @@ const IN_COLS = [
   ['DRAFT', 'メール下書き'],
   ['DONE', '完了した手順'],
   ['PROCESSED_AT', '処理日時'],
+  // ↓ 後から追加した列（既存のシートの並びを崩さないよう末尾に足す）
+  ['MEMO_DATE', '覚書の日付\n（空欄＝処理した日）'],
 ];
 const IN = {};
 IN_COLS.forEach(function (c, i) { IN[c[0]] = i + 1; });
@@ -167,6 +169,7 @@ function processChecked() {
   try {
     const ss = SpreadsheetApp.getActive();
     const sh = ss.getSheetByName(SHEET.INPUT);
+    ensureInputHeaders_(sh);
     ensureFoldersAndTemplates_();
     const s = getSettings_();
     const last = sh.getLastRow();
@@ -223,6 +226,7 @@ function processRow_(ss, sh, rowNum, row, s) {
   if (c.n > 1) put(IN.REST, c.rest);
   if (c.n > 1) put(IN.INTERVAL, c.interval);
   if (c.method !== '併用' && c.cardParts.length && !row[IN.LINK - 1]) put(IN.LINK, c.cardParts[0].link);
+  if (c.n > 1) put(IN.MEMO_DATE, c.memoDate);
   put(IN.STATUS, '処理中…');
 
   const done = {};
@@ -346,6 +350,7 @@ function buildContract_(row, s, priceRows) {
     bankAmount: bankAmount,
     link: method !== '併用' && method !== '銀行振込' ? (userLinks[0] || masterLink) : '',
     kobetsuStart: String(get('KOBETSU_START') || '').trim(),
+    memoDate: toDate_(get('MEMO_DATE')) || startOfDay_(new Date()),
     oneTime: get('ONETIME') === true,
     countLabel: n === 1 ? '一括' : n + '分割',
     methodLabel: parts ? parts.map(function (p) { return p.method + man_(p.amount, ''); }).join('＋') : method,
@@ -523,7 +528,7 @@ function createMemo_(c, s) {
     'プログラム名': c.programName,
     '合計金額': yen_(c.total) + '円',
     '分割回数': String(c.n),
-    '作成日': Utilities.formatDate(c.contractDate, TZ, 'yyyy年M月d日'),
+    '作成日': Utilities.formatDate(c.memoDate, TZ, 'yyyy年M月d日'),
   };
   Object.keys(vars).forEach(function (k) {
     body.replaceText('\\{\\{' + k + '\\}\\}', vars[k]);
@@ -924,7 +929,7 @@ function setupSettingsSheet_(ss) {
 function setupInputSheet_(ss) {
   let sh = ss.getSheetByName(SHEET.INPUT);
   if (!sh) sh = ss.insertSheet(SHEET.INPUT, 0);
-  if (sh.getLastRow() > 0) return;
+  if (sh.getLastRow() > 0) { ensureInputHeaders_(sh); return; }
   const headers = IN_COLS.map(function (c) { return c[1]; });
   ensureSize_(sh, 500, headers.length);
   sh.getRange(1, 1, 1, headers.length).setValues([headers])
@@ -943,8 +948,20 @@ function setupInputSheet_(ss) {
   sh.getRange(2, IN.CONTRACT, rows, 2).setNumberFormat('yyyy/m/d');
   sh.getRange(2, IN.TOTAL, rows, 3).setNumberFormat('#,##0');
   sh.getRange(2, IN.PROCESSED_AT, rows, 1).setNumberFormat('yyyy/m/d h:mm');
+  sh.getRange(2, IN.MEMO_DATE, rows, 1).setNumberFormat('yyyy/m/d');
   [[IN.CHECK, 60], [IN.STATUS, 140], [IN.ID, 130], [IN.NAME, 120], [IN.EMAIL, 200], [IN.MIX, 260], [IN.LINK, 220], [IN.NOTE, 200], [IN.DONE, 200]]
     .forEach(function (w) { sh.setColumnWidth(w[0], w[1]); });
+}
+
+/** 後から追加した列の見出しが無ければ足す（既存シート向け） */
+function ensureInputHeaders_(sh) {
+  ensureSize_(sh, 2, IN_COLS.length);
+  const cur = sh.getRange(1, 1, 1, IN_COLS.length).getValues()[0];
+  IN_COLS.forEach(function (c, i) {
+    if (cur[i] !== '') return;
+    sh.getRange(1, i + 1).setValue(c[1]).setFontWeight('bold').setBackground('#fde9d9').setWrap(true);
+    if (c[0] === 'MEMO_DATE') sh.getRange(2, i + 1, sh.getMaxRows() - 1, 1).setNumberFormat('yyyy/m/d');
+  });
 }
 
 function setupScheduleSheet_(ss) {

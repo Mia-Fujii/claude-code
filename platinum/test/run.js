@@ -25,7 +25,7 @@ const fmt = (d) => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 const S = { 'PayPalリンクの先頭': 'https://paypal.me/crozentokyo/', 'プログラム名_新規': 'プラチナプログラム', 'プログラム名_更新': 'プラチナ継続プログラム', '振込口座': '楽天銀行' };
 
 function row(o) {
-  const r = new Array(25).fill('');
+  const r = new Array(g.IN.MEMO_DATE).fill('');
   for (const k of Object.keys(o)) r[g.IN[k] - 1] = o[k];
   return r;
 }
@@ -152,6 +152,13 @@ test('更新で契約日が空欄：メンバーリストの契約満了日の�
     assert.strictEqual(fmt(g.nextDayAfterPreviousEnd_('foo@example.com', {})), '2026/11/1');
     assert.throws(() => g.nextDayAfterPreviousEnd_('none@example.com', {}), /メンバーリストにこのメールアドレスの方がいません/);
   } finally { g.openTab_ = orig; }
+});
+
+test('覚書の日付：空欄なら今日、入力があればその日', () => {
+  const base = { KUBUN: '更新', KOBETSU: 'なし', NAME: 'x', EMAIL: 'a@b.jp', CONTRACT: D(2026, 11, 1), DUE1: D(2026, 10, 31), COUNT: 12, METHOD: 'スクエア', TOTAL: 552000 };
+  const today = new Date();
+  assert.strictEqual(fmt(g.buildContract_(row(base), S, []).memoDate), fmt(today));
+  assert.strictEqual(fmt(g.buildContract_(row({ ...base, MEMO_DATE: D(2026, 10, 26) }), S, []).memoDate), '2026/10/26');
 });
 
 console.log(`\n${passed} tests passed`);
