@@ -731,7 +731,8 @@ function postChatwork_(s, text) {
   const res = UrlFetchApp.fetch('https://api.chatwork.com/v2/rooms/' + encodeURIComponent(room) + '/messages', {
     method: 'post',
     headers: { 'X-ChatWorkToken': token },
-    payload: { body: (to ? '[To:' + to + ']\n' : '') + text },
+    // self_unread=1：自分のトークンで送っても、自分から見て未読（未読①）にする
+    payload: { body: (to ? '[To:' + to + ']\n' : '') + text, self_unread: '1' },
     muteHttpExceptions: true,
   });
   if (res.getResponseCode() !== 200) throw new Error('HTTP ' + res.getResponseCode() + ' ' + res.getContentText());
