@@ -263,4 +263,9 @@ test('税理士シートの決済日：メールと契約日が一致する行�
   } finally { g.openTab_ = orig; }
 });
 
+test('グレー判定：手塗りのグレーだけ', () => {
+  for (const c of ['#cccccc', '#D9D9D9', '#b7b7b7', '#999999', '#efefef']) assert.ok(g.isGrey_(c), c);
+  for (const c of ['#ffffff', '#000000', '#ffff00', '#00ff00', '', null]) assert.ok(!g.isGrey_(c), String(c));
+});
+
 console.log(`\n${passed} tests passed`);

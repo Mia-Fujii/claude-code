@@ -118,6 +118,7 @@ function onOpen() {
     .addItem('✅ チェックした契約を処理する', 'processChecked')
     .addSeparator()
     .addItem('🔁 選択した行の覚書を作り直す', 'redoMemo')
+    .addItem('🎨 メンバーリストの終了分を自動でグレーにする', 'setupMemberListGreying')
     .addSeparator()
     .addItem('🔔 支払い期日チェックを今すぐ実行', 'dailyCheck')
     .addSeparator()
@@ -526,6 +527,8 @@ function updateMemberList_(c, s) {
   }
   sh.getRange(target, 1, 1, newRow.length).setValues([newRow]);
   sh.getRange(target, 7, 1, newRow.length - 6).setNumberFormat('yyyy/m/d');
+  // 契約期間の列は背景色を引き継がない（終わった期間のグレーは条件付き書式で自動で付く）
+  sh.getRange(target, 7, 1, sh.getMaxColumns() - 6).setBackground(null);
 
   // A列の番号を振り直す
   const names = sh.getRange(2, 3, target - 1, 1).getValues();
@@ -575,6 +578,64 @@ function redoMemo() {
     }
   });
   ui.alert('結果', results.join('\n'), ui.ButtonSet.OK);
+}
+
+/** 契約期間のグレー表示に使う条件付き書式の式（G2 起点。奇数列＝開始日は右隣の満了日、偶数列＝満了日は自分を見る） */
+const GREY_FORMULA = '=IF(ISODD(COLUMN()),AND(ISNUMBER(H2),H2<TODAY()),AND(ISNUMBER(G2),G2<TODAY()))';
+const GREY_COLOR = '#cccccc';
+
+/**
+ * 最新版メンバーリストの契約期間（G列以降、2列で1組）を、満了日が過ぎたら自動でグレーにする。
+ * 手で塗ってあったグレーの背景は消して、条件付き書式に置き換える（黄色などグレー以外は残す）。
+ */
+function setupMemberListGreying() {
+  const ui = SpreadsheetApp.getUi();
+  const s = getSettings_();
+  const ok = ui.alert('メンバーリストの色分け',
+    '【' + s['モード'] + 'モード】のメンバーリスト（最新版メンバーリスト）で、\n' +
+    '・G列以降の契約期間は、満了日が過ぎたら自動でグレーにします\n' +
+    '・手で塗ってあるグレーの背景は消します（黄色などはそのまま）\n\nよろしいですか？',
+    ui.ButtonSet.YES_NO);
+  if (ok !== ui.Button.YES) return;
+  const sh = openTab_(s['メンバーリストURL'], s['メンバーリスト_タブ名']);
+  const cleared = applyMemberListGreying_(sh);
+  ui.alert('設定しました。手で塗ってあったグレーを ' + cleared + ' か所消しました。');
+}
+
+function applyMemberListGreying_(sh) {
+  const lastRow = Math.max(2, sh.getLastRow());
+  const width = sh.getMaxColumns() - 6;
+  // 手塗りのグレーを消す
+  const range = sh.getRange(2, 7, lastRow - 1, width);
+  const bgs = range.getBackgrounds();
+  let cleared = 0;
+  const next = bgs.map(function (row) {
+    return row.map(function (c) {
+      if (isGrey_(c)) { cleared++; return '#ffffff'; }
+      return c;
+    });
+  });
+  if (cleared) range.setBackgrounds(next);
+  // 以前に設定した同じルールは外してから付け直す
+  const rules = sh.getConditionalFormatRules().filter(function (r) {
+    const b = r.getBooleanCondition();
+    return !(b && String(b.getCriteriaValues()[0]) === GREY_FORMULA);
+  });
+  rules.push(SpreadsheetApp.newConditionalFormatRule()
+    .whenFormulaSatisfied(GREY_FORMULA)
+    .setBackground(GREY_COLOR)
+    .setRanges([sh.getRange(2, 7, sh.getMaxRows() - 1, width)])
+    .build());
+  sh.setConditionalFormatRules(rules);
+  return cleared;
+}
+
+/** #cccccc のような無彩色のグレー（白・黒は除く） */
+function isGrey_(c) {
+  const m = String(c || '').toLowerCase().match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/);
+  if (!m) return false;
+  const r = parseInt(m[1], 16), g = parseInt(m[2], 16), b = parseInt(m[3], 16);
+  return r === g && g === b && r >= 0x66 && r <= 0xf3;
 }
 
 /** 最新版メンバーリストから、そのメールアドレスの方の契約満了日の翌日を返す */
