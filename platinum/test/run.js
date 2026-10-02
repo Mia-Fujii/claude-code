@@ -187,6 +187,7 @@ test('総額が空欄：1回の金額×回数で計算', () => {
 test('覚書の雛形：全行が書き込まれ、閉じた後に触らない', () => {
   const paras = [];
   let closed = false;
+  let font = null;
   const mkPara = (text) => {
     const p = { text, list: false, setText(x) { if (closed) throw new Error('closed'); this.text = x; }, // 本物と同じく何も返さない
       setHeading() { return this; }, setAlignment(a) { this.align = a; return this; },
@@ -197,7 +198,7 @@ test('覚書の雛形：全行が書き込まれ、閉じた後に触らない',
   mkPara('');
   const doc = {
     getId() { if (closed) throw new Error('Document is closed'); return 'DOC1'; },
-    getBody: () => ({ getParagraphs: () => paras, appendParagraph: (x) => { if (closed) throw new Error('closed'); return mkPara(x); },
+    getBody: () => ({ editAsText: () => ({ setFontFamily: (f) => { font = f; } }), getParagraphs: () => paras, appendParagraph: (x) => { if (closed) throw new Error('closed'); return mkPara(x); },
       appendListItem: (x) => { if (closed) throw new Error('closed'); const p = mkPara(x); p.list = true; return p; } }),
     saveAndClose() { closed = true; },
   };
@@ -212,6 +213,7 @@ test('覚書の雛形：全行が書き込まれ、閉じた後に触らない',
   for (const k of ['{{氏名}}', '{{支払明細}}', '{{作成日}}', '甲が乙に対して', 'ヴォンドラ高橋若菜']) assert.ok(text.includes(k), k);
   assert.ok(!text.includes('乙が甲に対して') && !text.includes('髙橋'));
   const align = (s) => paras.find((p) => p.text === s).align;
+  assert.strictEqual(font, 'Noto Serif JP');
   assert.strictEqual(align('費用に関する覚書'), 'C');
   assert.strictEqual(align('記'), 'C');
   assert.strictEqual(align('{{支払明細}}'), 'C');

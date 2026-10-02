@@ -1187,6 +1187,8 @@ function createMemoTemplate_(name, folder) {
     p.setAlignment(l[1]);
     if (l[0]) p.editAsText().setBold(false).setFontSize(o.size || 11);
   });
+  // 元の覚書は明朝体（ヒラギノ明朝）。PDFでもWindowsでも明朝で出るよう Google の明朝体にする
+  try { body.editAsText().setFontFamily('Noto Serif JP'); } catch (e) { /* フォントが使えなければ標準のまま */ }
   doc.saveAndClose();
   DriveApp.getFileById(id).moveTo(folder);
   return id;
