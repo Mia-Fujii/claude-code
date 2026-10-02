@@ -316,11 +316,11 @@ function buildContract_(row, s, priceRows) {
   if (total == null) {
     const f = parseAmount_(get('FIRST'));
     const r = parseAmount_(get('REST'));
-    if (n === 1 && f != null) total = f;
-    else if (r != null) total = (f != null ? f : r) + r * (n - 1);
+    if (r != null) total = (f != null ? f : r) + r * (n - 1);
+    else if (f != null) total = f * n; // 1回の金額だけ入っていれば、毎回同じ金額とみなす
   }
   if (total == null && price) total = price.total;
-  if (!total) throw new Error('総額が入っていません（料金マスタにも該当がありません）');
+  if (!total) throw new Error('金額が入っていません。「総額」か「2回目以降の1回の金額」に金額を入れてください（料金マスタにも該当がありません）');
 
   const amounts = computeAmounts_(total, n, parseAmount_(get('FIRST')), parseAmount_(get('REST')));
   const interval = Number(get('INTERVAL')) || (n === 2 ? 6 : 1);

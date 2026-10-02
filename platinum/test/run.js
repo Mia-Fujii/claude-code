@@ -179,7 +179,9 @@ test('総額が空欄：1回の金額×回数で計算', () => {
   const h = g.buildContract_(row({ ...base, COUNT: 3, FIRST: 300000, REST: 400000 }), S, []);
   assert.strictEqual(h.total, 1100000);
   assert.strictEqual(g.buildContract_(row({ ...base, COUNT: 1, FIRST: 1100000 }), S, []).total, 1100000);
-  assert.throws(() => g.buildContract_(row(base), S, []), /総額が入っていません/);
+  assert.strictEqual(g.buildContract_(row({ ...base, FIRST: 46000 }), S, []).total, 552000);
+  assert.strictEqual(g.buildContract_(row({ ...base, FIRST: '46,000円' }), S, []).rest, 46000);
+  assert.throws(() => g.buildContract_(row(base), S, []), /金額が入っていません/);
 });
 
 console.log(`\n${passed} tests passed`);
