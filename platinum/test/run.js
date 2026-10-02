@@ -1,0 +1,142 @@
+// Code.gs のうち Google のサービスを使わない部分を Node で確認するテスト
+// 実行: TZ=Asia/Tokyo node platinum/test/run.js
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+const assert = require('assert');
+
+const pad = (n, w = 2) => String(n).padStart(w, '0');
+const Utilities = {
+  formatDate(d, tz, f) {
+    const map = {
+      yyyy: d.getFullYear(), yy: pad(d.getFullYear() % 100), MM: pad(d.getMonth() + 1), M: d.getMonth() + 1,
+      dd: pad(d.getDate()), d: d.getDate(), HH: pad(d.getHours()), H: d.getHours(), mm: pad(d.getMinutes()),
+      ss: pad(d.getSeconds()), u: d.getDay() === 0 ? 7 : d.getDay(),
+    };
+    return f.replace(/yyyy|yy|MM|M|dd|d|HH|H|mm|ss|u/g, (t) => String(map[t]));
+  },
+};
+const ctx = { Utilities, console };
+vm.createContext(ctx);
+vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'Code.gs'), 'utf8') + '\n;this.IN = IN; this.MAIL_TEMPLATES = MAIL_TEMPLATES;', ctx);
+const g = ctx;
+const D = (y, m, d) => new Date(y, m - 1, d);
+const fmt = (d) => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+const S = { 'PayPalリンクの先頭': 'https://paypal.me/crozentokyo/', 'プログラム名_新規': 'プラチナプログラム', 'プログラム名_更新': 'プラチナ継続プログラム', '振込口座': '楽天銀行' };
+
+function row(o) {
+  const r = new Array(25).fill('');
+  for (const k of Object.keys(o)) r[g.IN[k] - 1] = o[k];
+  return r;
+}
+
+let passed = 0;
+function test(name, fn) { fn(); passed++; console.log('ok -', name); }
+
+test('金額の読み取り', () => {
+  assert.strictEqual(g.parseAmount_('40万'), 400000);
+  assert.strictEqual(g.parseAmount_('1,400,000円'), 1400000);
+  assert.strictEqual(g.parseAmount_('５５２，０００円'), 552000);
+  assert.strictEqual(g.parseAmount_(46000), 46000);
+  assert.strictEqual(g.parseAmount_(''), null);
+});
+
+test('支払方法の表記ゆれ', () => {
+  assert.strictEqual(g.normMethod_('銀フリ'), '銀行振込');
+  assert.strictEqual(g.normMethod_('paypal'), 'PayPal');
+  assert.strictEqual(g.normMethod_('Square'), 'スクエア');
+  assert.strictEqual(g.normEmail_('mailto:Foo@Example.com '), 'foo@example.com');
+});
+
+test('併用の内訳（桁区切りのカンマで区切らない）', () => {
+  const p = g.parseMix_('銀行振込 40万, PayPal 350,000円、PayPal35万');
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(p)), [
+    { method: '銀行振込', amount: 400000 }, { method: 'PayPal', amount: 350000 }, { method: 'PayPal', amount: 350000 }]);
+});
+
+test('分割金額：割り切れる／端数は1回目／頭金指定', () => {
+  assert.deepStrictEqual({ ...g.computeAmounts_(552000, 12, null, null) }, { first: 46000, rest: 46000 });
+  assert.deepStrictEqual({ ...g.computeAmounts_(1000000, 3, null, null) }, { first: 333334, rest: 333333 });
+  assert.deepStrictEqual({ ...g.computeAmounts_(1100000, 3, 300000, null) }, { first: 300000, rest: 400000 });
+  assert.throws(() => g.computeAmounts_(100, 2, 30, 30), /金額が合いません/);
+});
+
+test('期日：月末寄せ・2分割は半年後', () => {
+  assert.strictEqual(fmt(g.addMonths_(D(2026, 1, 31), 1)), '2026/2/28');
+  const s = g.buildSchedule_(D(2026, 6, 23), 2, 6, 710000, 710000);
+  assert.deepStrictEqual(Array.from(s, (p) => fmt(p.date)), ['2026/6/23', '2026/12/23']);
+});
+
+test('覚書サンプルと同じ：個別なし12分割（5/17〜翌4/17・46,000円）', () => {
+  const c = g.buildContract_(row({ KUBUN: '更新', KOBETSU: 'なし', NAME: '神保麻紀', EMAIL: 'a@b.jp', CONTRACT: D(2026, 5, 11), DUE1: D(2026, 5, 17), COUNT: 12, METHOD: 'スクエア', TOTAL: 552000, LINK: 'https://square.link/u/VG9KPeoe' }), S, []);
+  assert.strictEqual(fmt(c.endDate), '2027/5/10');
+  assert.strictEqual(fmt(c.schedule[11].date), '2027/4/17');
+  assert.ok(c.schedule.every((p) => p.amount === 46000));
+  assert.strictEqual(g.describePayment_(c), '1回46,000円の12分割');
+  assert.strictEqual(c.programName, 'プラチナ継続プログラム');
+  assert.strictEqual(c.cardParts[0].link, 'https://square.link/u/VG9KPeoe');
+});
+
+test('契約満了＝1年後の前日', () => {
+  const c = g.buildContract_(row({ KUBUN: '新規', KOBETSU: 'あり', NAME: 'x', EMAIL: 'a@b.jp', CONTRACT: D(2025, 11, 1), DUE1: D(2025, 11, 7), COUNT: 1, METHOD: '銀行振込', TOTAL: 1400000 }), S, []);
+  assert.strictEqual(fmt(c.endDate), '2026/10/31');
+  assert.strictEqual(c.bankAmount, 1400000);
+  assert.strictEqual(g.describePayment_(c), '銀行振込の一括払い');
+});
+
+test('併用：銀行振込40万＋カード35万×2枚', () => {
+  const c = g.buildContract_(row({ KUBUN: '更新', KOBETSU: 'あり', NAME: 'x', EMAIL: 'a@b.jp', CONTRACT: D(2026, 3, 20), DUE1: D(2026, 3, 24), COUNT: 1, METHOD: '併用', MIX: '銀行振込 40万, PayPal 35万, PayPal 35万' }), S, []);
+  assert.strictEqual(c.total, 1100000);
+  assert.strictEqual(c.bankAmount, 400000);
+  assert.strictEqual(g.describePayment_(c), '銀行振込40万円＋クレジットカード35万円×2枚の一括払い');
+  assert.strictEqual(c.methodLabel, '銀行振込40万＋PayPal35万＋PayPal35万');
+  assert.strictEqual(g.linkBlock_(c.cardParts), '1枚目クレジットカード（35万円）\nhttps://paypal.me/crozentokyo/350000jpy\n\n2枚目クレジットカード（35万円）\nhttps://paypal.me/crozentokyo/350000jpy');
+});
+
+test('PayPal 2分割：リンク自動・分割補足', () => {
+  const c = g.buildContract_(row({ KUBUN: '更新', KOBETSU: 'あり', NAME: 'x', EMAIL: 'a@b.jp', CONTRACT: D(2026, 10, 10), DUE1: D(2026, 10, 17), COUNT: 2, METHOD: 'PayPal', TOTAL: 1120000 }), S, []);
+  assert.strictEqual(c.cardParts[0].link, 'https://paypal.me/crozentokyo/560000jpy');
+  assert.strictEqual(c.interval, 6);
+  assert.strictEqual(fmt(c.schedule[1].date), '2027/4/17');
+  const v = g.contractMailVars_(c, { ...S, 'フォーム_個別あり_分割': 'F' });
+  assert.strictEqual(v['分割補足'], '※2回目のお支払いは半年後となります');
+  assert.strictEqual(v['期限'], '10月17日（土）');
+});
+
+test('料金マスタから総額を補う', () => {
+  const price = [{ kubun: '更新', kobetsu: 'なし', n: 12, method: 'スクエア', total: 552000, first: 46000, rest: 46000, link: 'L' }];
+  const c = g.buildContract_(row({ KUBUN: '更新', KOBETSU: 'なし', NAME: 'x', EMAIL: 'a@b.jp', CONTRACT: D(2026, 5, 11), DUE1: D(2026, 5, 17), COUNT: 12, METHOD: 'スクエア' }), S, price);
+  assert.strictEqual(c.total, 552000);
+  assert.strictEqual(c.cardParts[0].link, 'L');
+});
+
+test('入力不足はまとめてエラー', () => {
+  assert.throws(() => g.buildContract_(row({ KUBUN: '新規' }), S, []), /個別コンサル、氏名、メールアドレス、契約日、手続き期限、支払回数、支払方法/);
+});
+
+test('テンプレ：件名の取り出し・空の目印行は消す・知らない目印は残す', () => {
+  const t = g.parseTemplateText_('件名：【重要】{{氏名}}様\n\n{{氏名}}様\n\n{{振込口座}}\n{{決済リンク}}\n{{謎}}\n');
+  assert.strictEqual(t.subject, '【重要】{{氏名}}様');
+  const out = g.renderTemplate_(t.body, { '氏名': '山田', '振込口座': '', '決済リンク': 'L' });
+  assert.strictEqual(out, '山田様\n\nL\n{{謎}}\n');
+});
+
+test('全メールテンプレに未知の目印がない', () => {
+  const S2 = { ...S, 'フォーム_個別あり_一括': 'F', 'フォーム_個別あり_分割': 'F', 'フォーム_個別なし_一括': 'F', 'フォーム_個別なし_分割': 'F' };
+  const c = g.buildContract_(row({ KUBUN: '新規', KOBETSU: 'あり', NAME: 'x', EMAIL: 'a@b.jp', CONTRACT: D(2026, 6, 1), DUE1: D(2026, 6, 26), COUNT: 36, METHOD: 'mosh', TOTAL: 1548000, LINK: 'https://mosh.jp/x' }), S2, []);
+  const v = g.contractMailVars_(c, S2);
+  for (const k of ['新規_一括', '新規_分割', '更新_一括', '更新_分割']) {
+    const t = g.parseTemplateText_(g.MAIL_TEMPLATES[k]);
+    const body = g.renderTemplate_(t.body, v);
+    assert.ok(!/\{\{/.test(body), k + ' に未置換の目印: ' + body.match(/\{\{[^}]+\}\}/));
+    assert.ok(t.subject.startsWith('【重要】'));
+  }
+  const nb = g.renderTemplate_(g.parseTemplateText_(g.MAIL_TEMPLATES['新規_分割']).body, v);
+  assert.ok(nb.includes('クレジットカード36分割（43,000円 × 36回）'));
+  assert.ok(nb.includes('【6月26日（金）】までに'));
+  const r = g.parseTemplateText_(g.MAIL_TEMPLATES['支払案内']);
+  const rb = g.renderTemplate_(r.body, { '氏名': 'x', '回': '2', '支払期日': '9月2日（水）', '支払金額': '710,000円', '振込口座': g.bankBlock_(S, 710000), '決済リンク': '' });
+  assert.ok(!/\{\{/.test(rb) && rb.includes('ご入金額：710,000円（税込）'));
+});
+
+console.log(`\n${passed} tests passed`);
